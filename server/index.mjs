@@ -29,6 +29,7 @@ const googleVideoBaseUrl =
 const googleVideoDownloadBaseUrl =
   process.env.GEMINI_VIDEO_DOWNLOAD_BASE_URL || googleVideoBaseUrl;
 const googleVideoModel = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-generate-preview";
+const googleTextModel = process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
 const googleVideoDuration = Number(process.env.GEMINI_VIDEO_DURATION || 8);
 const googleVideoResolution = process.env.GEMINI_VIDEO_RESOLUTION || "720p";
 const apiyiApiKey = process.env.APIYI_KEY || "";
@@ -447,10 +448,6 @@ app.listen(port, "0.0.0.0", () => {
 
 async function generateContent(selectedCase, doctorNotes) {
   const fallback = fallbackContent(selectedCase, doctorNotes);
-  if (!llmKey) {
-    return { content: fallback, model: "院内规则模板" };
-  }
-
   const prompt = [
     "你是医院患者宣教内容生成助手。",
     "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文宣教内容。",
@@ -465,6 +462,10 @@ async function generateContent(selectedCase, doctorNotes) {
     `表达风格：${selectedCase.tone}`,
     `医生补充：${doctorNotes || "无"}`,
   ].join("\n");
+
+  if (!llmKey) {
+    return generateGeminiContent(prompt, fallback);
+  }
 
   try {
     const result = await fetch(`${llmBaseUrl}/v1/chat/completions`, {
@@ -496,6 +497,54 @@ async function generateContent(selectedCase, doctorNotes) {
     return { content: normalizeContent(parseJson(raw), fallback), model: llmModel };
   } catch (error) {
     console.warn("LLM fallback:", error);
+    return generateGeminiContent(prompt, fallback);
+  }
+}
+
+async function generateGeminiContent(prompt, fallback) {
+  if (!googleVideoApiKey) {
+    return { content: fallback, model: "院内规则模板" };
+  }
+
+  try {
+    const result = await fetch(
+      `${googleVideoBaseUrl}/models/${googleTextModel}:generateContent?key=${encodeURIComponent(googleVideoApiKey)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: [
+                    "你只生成医院宣教内容 JSON，必须患者友好、事实谨慎、可由医生审核。",
+                    "narration 必须是模型原创的完整中文语音宣教稿，不要输出模板句。",
+                    prompt,
+                  ].join("\n"),
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.45,
+            responseMimeType: "application/json",
+          },
+        }),
+      },
+    );
+
+    if (!result.ok) {
+      throw new Error(`Gemini HTTP ${result.status}`);
+    }
+
+    const payload = await result.json();
+    const raw = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
+    return { content: normalizeContent(parseJson(raw), fallback), model: googleTextModel };
+  } catch (error) {
+    console.warn("Gemini content fallback:", error);
     return { content: fallback, model: "院内规则模板" };
   }
 }
