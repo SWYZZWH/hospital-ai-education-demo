@@ -26,7 +26,9 @@ const googleVideoApiKey =
   "";
 const googleVideoBaseUrl =
   process.env.GEMINI_VIDEO_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
-const googleVideoModel = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-fast-generate-preview";
+const googleVideoDownloadBaseUrl =
+  process.env.GEMINI_VIDEO_DOWNLOAD_BASE_URL || googleVideoBaseUrl;
+const googleVideoModel = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-generate-preview";
 const googleVideoDuration = Number(process.env.GEMINI_VIDEO_DURATION || 8);
 const googleVideoResolution = process.env.GEMINI_VIDEO_RESOLUTION || "720p";
 const apiyiApiKey = process.env.APIYI_KEY || "";
@@ -883,7 +885,7 @@ async function downloadGoogleVideo(video, outputPath) {
     for (const endpoint of downloadEndpoints) {
       try {
         await downloadVideoWithHeaders(
-          `${googleVideoBaseUrl.replace(/\/$/, "")}${endpoint}`,
+          `${googleVideoDownloadBaseUrl.replace(/\/$/, "")}${endpoint}`,
           outputPath,
           { "x-goog-api-key": googleVideoApiKey },
         );
@@ -899,7 +901,7 @@ async function downloadGoogleVideo(video, outputPath) {
 
 function rewriteGoogleUrl(url) {
   const officialBase = "https://generativelanguage.googleapis.com/v1beta";
-  const configuredBase = googleVideoBaseUrl.replace(/\/$/, "");
+  const configuredBase = googleVideoDownloadBaseUrl.replace(/\/$/, "");
   return url.startsWith(officialBase)
     ? `${configuredBase}${url.slice(officialBase.length)}`
     : url;
