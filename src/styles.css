@@ -762,14 +762,35 @@ h3 {
 }
 
 .mini-player {
+  display: flex;
+  width: 100%;
+  align-items: center;
   gap: 9px;
   padding: 12px;
+  border: 0;
   border-radius: 18px;
   color: white;
   background: var(--deep);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
-.mini-player div {
+.mini-player.ready:hover {
+  transform: translateY(-1px);
+  background: #172d32;
+  box-shadow: 0 14px 30px rgba(20, 35, 40, 0.22);
+}
+
+.mini-player:disabled {
+  cursor: not-allowed;
+  opacity: 0.82;
+}
+
+.mini-player .player-text {
   flex: 1;
 }
 
@@ -783,16 +804,15 @@ h3 {
   font-size: 12px;
 }
 
-.mini-player button {
+.mini-play-icon {
   display: grid;
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 0;
   border-radius: 50%;
   color: var(--deep);
   background: #eaf8a7;
-  cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .patient-steps {

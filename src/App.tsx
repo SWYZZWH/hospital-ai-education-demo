@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AudioLines,
@@ -174,6 +174,7 @@ function App() {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState("");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const selectedCase = useMemo(
     () => educationCases.find((item) => item.key === selectedKey) ?? educationCases[0],
@@ -257,6 +258,15 @@ function App() {
     setStatus("idle");
     setResult(null);
     setError("");
+  };
+
+  const playPatientAudio = () => {
+    const player = audioRef.current;
+    if (!player || !audioUrl) {
+      return;
+    }
+    player.currentTime = 0;
+    void player.play();
   };
 
   return (
@@ -401,7 +411,7 @@ function App() {
                 <span>语音宣教</span>
               </div>
               {audioUrl ? (
-                <audio className="audio-player" controls src={audioUrl} />
+                <audio ref={audioRef} className="audio-player" controls src={audioUrl} />
               ) : (
                 <div className="audio-display">
                   {Array.from({ length: 34 }).map((_, index) => (
@@ -460,16 +470,22 @@ function App() {
                   <span key={warning}>{warning}</span>
                 ))}
               </div>
-              <div className="mini-player">
+              <button
+                className={`mini-player ${audioUrl ? "ready" : ""}`}
+                type="button"
+                onClick={playPatientAudio}
+                disabled={!audioUrl}
+                aria-label={audioUrl ? "播放语音宣教" : "语音生成后可播放"}
+              >
                 <FileAudio size={19} />
-                <div>
+                <div className="player-text">
                   <strong>语音宣教</strong>
                   <span>{audioUrl ? "已生成，可播放" : selectedCase.duration}</span>
                 </div>
-                <button aria-label="播放语音宣教" type="button">
+                <span className="mini-play-icon">
                   <Play size={15} fill="currentColor" />
-                </button>
-              </div>
+                </span>
+              </button>
               <div className="patient-steps">
                 {content.points.map((point) => (
                   <div key={point}>

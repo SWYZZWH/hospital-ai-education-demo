@@ -284,6 +284,8 @@ async function generateAudio(text, audioPath) {
 
 async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
   const slidePaths = [];
+  const segmentPaths = [];
+  const audioDuration = await getMediaDuration(audioPath);
   const scenes = [
     {
       label: selectedCase.department,
@@ -296,6 +298,7 @@ async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
       body: item,
     })),
   ];
+  const sceneDuration = Math.max(audioDuration / scenes.length, 3.2);
 
   for (const [index, scene] of scenes.entries()) {
     const slidePath = path.join(generatedDir, `${id}-slide-${index}.png`);
@@ -303,13 +306,23 @@ async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
       .png()
       .toFile(slidePath);
     slidePaths.push(slidePath);
+
+    const segmentPath = path.join(generatedDir, `${id}-segment-${index}.mp4`);
+    await renderAnimatedSegment(
+      slidePath,
+      segmentPath,
+      sceneDuration,
+      selectedCase.accent,
+      index,
+    );
+    segmentPaths.push(segmentPath);
   }
 
-  const concatPath = path.join(generatedDir, `${id}-slides.txt`);
-  const concatBody = slidePaths
-    .map((slidePath) => `file '${slidePath.replace(/'/g, "'\\''")}'\nduration 6`)
+  const concatPath = path.join(generatedDir, `${id}-segments.txt`);
+  const concatBody = segmentPaths
+    .map((segmentPath) => `file '${segmentPath.replace(/'/g, "'\\''")}'`)
     .join("\n");
-  await writeFile(concatPath, `${concatBody}\nfile '${slidePaths.at(-1)}'\n`);
+  await writeFile(concatPath, `${concatBody}\n`);
 
   await run("ffmpeg", [
     "-y",
@@ -321,19 +334,79 @@ async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
     concatPath,
     "-i",
     audioPath,
+    "-map",
+    "0:v:0",
+    "-map",
+    "1:a:0",
     "-c:v",
-    "libx264",
-    "-pix_fmt",
-    "yuv420p",
-    "-r",
-    "30",
+    "copy",
     "-c:a",
     "aac",
     "-b:a",
     "160k",
+    "-t",
+    audioDuration.toFixed(3),
     "-shortest",
     videoPath,
   ]);
+}
+
+async function renderAnimatedSegment(imagePath, segmentPath, duration, accent, index) {
+  const frames = Math.max(1, Math.round(duration * 30));
+  const fadeOutStart = Math.max(duration - 0.55, 0.1);
+  const color = hexToFfmpegColor(accent);
+  const drift = index % 2 === 0 ? "sin(on/22)*18" : "cos(on/20)*16";
+  const zoom = index % 2 === 0 ? "min(zoom+0.0012,1.07)" : "max(1.07-on*0.0011,1.0)";
+  const filter = [
+    `scale=1280:720`,
+    `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)+${drift}':y='ih/2-(ih/zoom/2)+sin(on/28)*10':d=${frames}:s=1280x720:fps=30`,
+    `fade=t=in:st=0:d=0.35`,
+    `fade=t=out:st=${fadeOutStart.toFixed(3)}:d=0.5`,
+    `drawbox=x=86:y=642:w='min((iw-172)*t/${duration.toFixed(3)},iw-172)':h=12:color=${color}@0.85:t=fill`,
+    `drawbox=x='1018+sin(t*3.2)*12':y='112+cos(t*2.4)*10':w=88:h=88:color=${color}@0.16:t=fill`,
+    `format=yuv420p`,
+  ].join(",");
+
+  await run("ffmpeg", [
+    "-y",
+    "-loop",
+    "1",
+    "-i",
+    imagePath,
+    "-t",
+    duration.toFixed(3),
+    "-vf",
+    filter,
+    "-an",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "22",
+    "-r",
+    "30",
+    "-pix_fmt",
+    "yuv420p",
+    segmentPath,
+  ]);
+}
+
+async function getMediaDuration(filePath) {
+  const output = await run("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "default=noprint_wrappers=1:nokey=1",
+    filePath,
+  ]);
+  const duration = Number.parseFloat(output.trim());
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error("无法读取生成音频时长");
+  }
+  return duration;
 }
 
 function renderSlide(scene, selectedCase, index) {
@@ -401,17 +474,26 @@ function escapeXml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function hexToFfmpegColor(value) {
+  const normalized = String(value).replace("#", "0x");
+  return /^0x[0-9a-fA-F]{6}$/.test(normalized) ? normalized : "0x18a999";
+}
+
 function run(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
     let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
-        resolve();
+        resolve(stdout);
       } else {
         reject(new Error(`${command} exited with ${code}: ${stderr.slice(-1200)}`));
       }
