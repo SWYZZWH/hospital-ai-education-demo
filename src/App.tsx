@@ -63,6 +63,17 @@ type GenerationResult = {
   content: EducationContent;
   audioUrl: string;
   videoUrl?: string;
+  videoGenerationAvailable?: boolean;
+};
+
+type VideoJobStatus = "idle" | "processing" | "succeeded" | "failed";
+
+type VideoJobResult = {
+  jobId: string;
+  status: VideoJobStatus;
+  progress?: number;
+  videoUrl?: string;
+  error?: string;
 };
 
 const educationCases: EducationCase[] = [
@@ -182,6 +193,9 @@ function App() {
   const [error, setError] = useState("");
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [activeDirectorIndex, setActiveDirectorIndex] = useState(0);
+  const [videoStatus, setVideoStatus] = useState<VideoJobStatus>("idle");
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoError, setVideoError] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -194,6 +208,7 @@ function App() {
   const audioUrl = result?.audioUrl;
   const videoUrl = result?.videoUrl;
   const isGenerating = status === "generating";
+  const isVideoGenerating = videoStatus === "processing";
   const directorShots = useMemo(
     () => buildDirectorShots(content, selectedCase),
     [content, selectedCase],
@@ -216,11 +231,11 @@ function App() {
       detail: "生成普通话音频，患者可直接收听",
       icon: FileAudio,
     },
-    ...(videoUrl
+    ...(videoUrl || isVideoGenerating
       ? [
           {
-            label: "手术分镜",
-            detail: "生成可播放动画、字幕和旁白节奏",
+            label: "宣教视频",
+            detail: videoUrl ? "视频已生成，可发送给患者" : "正在生成可播放宣教视频",
             icon: Video,
           },
         ]
@@ -240,6 +255,9 @@ function App() {
     setProgress(0);
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
+    setVideoStatus("idle");
+    setVideoProgress(0);
+    setVideoError("");
 
     const timers = [1, 2, 3].map((value, index) =>
       window.setTimeout(() => setProgress(value), (index + 1) * 900),
@@ -264,6 +282,9 @@ function App() {
       setStatus("ready");
       setPlaybackProgress(0);
       setActiveDirectorIndex(0);
+      if (payload.videoGenerationAvailable && !payload.videoUrl) {
+        void startVideoGeneration(payload);
+      }
     } catch (generationError) {
       setStatus("error");
       setProgress(0);
@@ -287,6 +308,9 @@ function App() {
     setError("");
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
+    setVideoStatus("idle");
+    setVideoProgress(0);
+    setVideoError("");
   };
 
   const playPatientAudio = () => {
@@ -310,6 +334,78 @@ function App() {
     );
     setPlaybackProgress(nextProgress);
     setActiveDirectorIndex(nextIndex);
+  };
+
+  const startVideoGeneration = async (payload: GenerationResult) => {
+    setVideoStatus("processing");
+    setVideoProgress(0.06);
+    setVideoError("");
+
+    try {
+      const response = await fetch("/api/video-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationId: payload.id,
+          caseKey: selectedKey,
+          content: payload.content,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        throw new Error(errorPayload?.error || "视频生成任务创建失败");
+      }
+
+      const videoJob = (await response.json()) as VideoJobResult;
+      if (videoJob.status === "succeeded" && videoJob.videoUrl) {
+        setResult((current) =>
+          current ? { ...current, videoUrl: videoJob.videoUrl } : current,
+        );
+        setVideoStatus("succeeded");
+        setVideoProgress(1);
+        return;
+      }
+
+      await pollVideoJob(videoJob.jobId);
+    } catch (videoGenerationError) {
+      setVideoStatus("failed");
+      setVideoProgress(0);
+      setVideoError(
+        videoGenerationError instanceof Error
+          ? videoGenerationError.message
+          : "视频生成失败，请稍后重试",
+      );
+    }
+  };
+
+  const pollVideoJob = async (jobId: string) => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 5000 : 10000));
+      const response = await fetch(`/api/video-jobs/${jobId}`);
+      const payload = (await response.json().catch(() => null)) as VideoJobResult | null;
+
+      if (!response.ok || !payload) {
+        throw new Error(payload?.error || "视频生成状态查询失败");
+      }
+
+      setVideoProgress(payload.progress ?? Math.min(0.92, 0.08 + attempt * 0.03));
+
+      if (payload.status === "succeeded" && payload.videoUrl) {
+        setResult((current) =>
+          current ? { ...current, videoUrl: payload.videoUrl } : current,
+        );
+        setVideoStatus("succeeded");
+        setVideoProgress(1);
+        return;
+      }
+
+      if (payload.status === "failed") {
+        throw new Error(payload.error || "视频生成失败，请稍后重试");
+      }
+    }
+
+    throw new Error("视频仍在生成中，请稍后刷新查看");
   };
 
   return (
@@ -505,6 +601,39 @@ function App() {
                     <Download size={15} />
                     保存宣教片
                   </a>
+                </div>
+              </article>
+            )}
+            {isVideoGenerating && (
+              <article className="artifact video-status-artifact">
+                <div className="artifact-head">
+                  <LoaderCircle size={18} />
+                  <span>宣教视频生成中</span>
+                </div>
+                <div className="video-job-card">
+                  <strong>正在生成可播放宣教视频</strong>
+                  <p>系统正在制作医生可审核的视频，完成后可直接播放并发送给患者。</p>
+                  <div className="video-job-bar">
+                    <i style={{ width: `${Math.round(videoProgress * 100)}%` }} />
+                  </div>
+                  <span>{Math.max(5, Math.round(videoProgress * 100))}%</span>
+                </div>
+              </article>
+            )}
+            {videoStatus === "failed" && videoError && (
+              <article className="artifact video-status-artifact error-state">
+                <div className="artifact-head">
+                  <Video size={18} />
+                  <span>宣教视频暂未生成</span>
+                </div>
+                <div className="video-job-card">
+                  <strong>视频生成暂时失败</strong>
+                  <p>{videoError}</p>
+                  {result?.videoGenerationAvailable && (
+                    <button type="button" onClick={() => startVideoGeneration(result)}>
+                      重新生成视频
+                    </button>
+                  )}
                 </div>
               </article>
             )}

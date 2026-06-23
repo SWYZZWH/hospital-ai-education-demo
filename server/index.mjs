@@ -19,6 +19,14 @@ const llmBaseUrl =
 const llmModel = process.env.LLM_MODEL || "gemini-2.5-flash";
 const llmKey = process.env.LLM_PROXY_KEY || "";
 const exposeLocalVideo = process.env.EXPOSE_LOCAL_VIDEO === "true";
+const apiyiApiKey = process.env.APIYI_KEY || "";
+const apiyiBaseUrl = process.env.APIYI_BASE_URL || "https://api.apiyi.com/v1";
+const apiyiVideoModel = process.env.APIYI_VIDEO_MODEL || "veo-3.1-fast";
+const jxincmApiKey = process.env.JXINCM_API_KEY || "";
+const jxincmBaseUrl = process.env.JXINCM_BASE_URL || "https://api.jxincm.cn";
+const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "veo_3_1-fast";
+const jxincmDuration = Number(process.env.JXINCM_VIDEO_DURATION || process.env.DEFAULT_DURATION || 15);
+const videoJobs = new Map();
 
 const cases = {
   gastroscopy: {
@@ -183,7 +191,13 @@ app.get("/api/health", (_request, response) => {
     ok: true,
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
-    video: "ffmpeg mp4 storyboard animation renderer",
+    video: apiyiApiKey
+      ? `apiyi ${apiyiVideoModel}`
+      : jxincmApiKey
+        ? `jxincm ${jxincmModel}`
+        : exposeLocalVideo
+        ? "local ffmpeg renderer"
+        : "not configured",
   });
 });
 
@@ -212,6 +226,7 @@ app.post("/api/generate", async (request, response) => {
       model: generation.model,
       content,
       audioUrl: `/generated/${id}.mp3`,
+      videoGenerationAvailable: Boolean(apiyiApiKey || jxincmApiKey || exposeLocalVideo),
       ...(videoUrl ? { videoUrl } : {}),
     });
   } catch (error) {
@@ -219,6 +234,113 @@ app.post("/api/generate", async (request, response) => {
     response.status(500).json({
       error: "内容生成服务暂时不可用，请稍后重试",
       detail: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+app.post("/api/video-jobs", async (request, response) => {
+  if (!apiyiApiKey && !jxincmApiKey && !exposeLocalVideo) {
+    response.status(503).json({
+      error: "视频生成服务尚未配置",
+    });
+    return;
+  }
+
+  const caseKey = String(request.body?.caseKey || "surgery");
+  const generationId = sanitizeText(request.body?.generationId || nanoid(12));
+  const selectedCase = cases[caseKey] || cases.surgery;
+  const fallback = fallbackContent(selectedCase, "");
+  const content = normalizeContent(request.body?.content || {}, fallback);
+  const jobId = nanoid(12);
+  const videoPath = path.join(generatedDir, `${jobId}.mp4`);
+
+  try {
+    await mkdir(generatedDir, { recursive: true });
+
+    const prompt = buildVideoPrompt(content, selectedCase);
+
+    if (apiyiApiKey) {
+      const videoUrl = await createApiyiVideo(prompt, videoPath);
+      videoJobs.set(jobId, {
+        id: jobId,
+        provider: "apiyi",
+        remoteId: "",
+        status: "succeeded",
+        progress: 1,
+        videoUrl,
+        error: "",
+        createdAt: Date.now(),
+        videoPath,
+        prompt,
+      });
+      response.json({
+        jobId,
+        status: "succeeded",
+        progress: 1,
+        videoUrl,
+      });
+      return;
+    }
+
+    if (exposeLocalVideo && !jxincmApiKey) {
+      const audioPath = path.join(generatedDir, `${generationId}.mp3`);
+      await generateVideo(content, selectedCase, audioPath, videoPath, jobId);
+      response.json({
+        jobId,
+        status: "succeeded",
+        videoUrl: `/generated/${jobId}.mp4`,
+      });
+      return;
+    }
+
+    const remoteTask = await createJxincmVideo(prompt);
+    videoJobs.set(jobId, {
+      id: jobId,
+      provider: "jxincm",
+      remoteId: remoteTask.id,
+      status: "processing",
+      progress: 0.05,
+      videoUrl: null,
+      error: "",
+      createdAt: Date.now(),
+      videoPath,
+      prompt,
+    });
+
+    response.json({
+      jobId,
+      status: "processing",
+      progress: 0.05,
+    });
+  } catch (error) {
+    console.error("video job creation failed", error);
+    response.status(500).json({
+      error: "视频生成任务创建失败，请稍后重试",
+    });
+  }
+});
+
+app.get("/api/video-jobs/:jobId", async (request, response) => {
+  const jobId = sanitizeText(request.params.jobId);
+  const job = videoJobs.get(jobId);
+
+  if (!job) {
+    response.status(404).json({ error: "视频生成任务不存在或已过期" });
+    return;
+  }
+
+  try {
+    const updatedJob = await refreshVideoJob(job);
+    response.json(publicVideoJob(updatedJob));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    job.status = "failed";
+    job.error = "视频生成暂时失败，请稍后重试";
+    console.error("video job refresh failed", { jobId: job.id, message });
+    response.status(500).json({
+      jobId: job.id,
+      status: "failed",
+      error: "视频生成失败，请稍后重试",
     });
   }
 });
@@ -391,6 +513,215 @@ function buildNarration(content) {
     content.points.join("。"),
     "具体检查和治疗安排请以医生审核后的通知为准。",
   ].join("。");
+}
+
+function buildVideoPrompt(content, selectedCase) {
+  const shots = normalizeDirectorShots(content.directorShots, {
+    directorShots: buildDirectorShots(selectedCase),
+  });
+  const shotText = shots
+    .map((shot, index) => {
+      return `${index + 1}. ${shot.focus}: ${shot.subtitle}`;
+    })
+    .join(" ");
+
+  return [
+    "Create a polished 15-second hospital patient education video in Chinese hospital setting.",
+    "Scene style: clean realistic medical education film, calm lighting, professional doctors and patient, no blood, no gore, no graphic surgery, no scary imagery.",
+    `Department: ${selectedCase.department}. Topic: ${selectedCase.project}. Patient audience: ${selectedCase.audience}.`,
+    `Storyboard: ${shotText}`,
+    "For dental implant restoration education, show CBCT scan review, dental chair consultation, non-graphic instrument preparation, patient phone aftercare reminder.",
+    "Camera language: smooth clinical dolly, close-up of medical illustrations and patient checklist, readable subtitle-safe composition, realistic but non-invasive.",
+    "Avoid: marketing poster style, UI dashboard screenshots, text-heavy slides, distorted teeth, blood, exposed tissue, surgical close-up gore, unrealistic anatomy.",
+  ].join(" ");
+}
+
+async function createJxincmVideo(prompt) {
+  const payload = {
+    images: [],
+    model: jxincmModel,
+    orientation: "landscape",
+    prompt,
+    size: "large",
+    duration: Number.isFinite(jxincmDuration) && jxincmDuration >= 15 ? jxincmDuration : 15,
+    watermark: false,
+    private: true,
+  };
+  const data = await requestJxincm("/v1/video/create", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!data?.id) {
+    throw new Error("视频服务未返回任务 ID");
+  }
+  return data;
+}
+
+async function createApiyiVideo(prompt, videoPath) {
+  const data = await requestApiyi("/chat/completions", {
+    method: "POST",
+    body: JSON.stringify({
+      model: apiyiVideoModel,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const content = data?.choices?.[0]?.message?.content || "";
+  const remoteVideoUrl = extractVideoUrl(content);
+  await downloadVideo(remoteVideoUrl, videoPath);
+  return `/generated/${path.basename(videoPath)}`;
+}
+
+async function refreshVideoJob(job) {
+  if (["succeeded", "failed"].includes(job.status)) {
+    return job;
+  }
+
+  const data = await requestJxincm(`/v1/video/query?id=${encodeURIComponent(job.remoteId)}`, {
+    method: "GET",
+  });
+  const rawStatus = String(data?.status || "processing").toLowerCase();
+  const videoUrl = data?.video_url || data?.task_result?.videos?.[0]?.url || "";
+  const progress = Number(data?.progress || data?.percentage || 0);
+
+  if (rawStatus === "completed" && videoUrl) {
+    await downloadVideo(videoUrl, job.videoPath);
+    job.status = "succeeded";
+    job.progress = 1;
+    job.videoUrl = `/generated/${job.id}.mp4`;
+    return job;
+  }
+
+  if (rawStatus === "failed" || rawStatus === "error") {
+    job.status = "failed";
+    job.error = data?.error || data?.message || "视频生成失败";
+    return job;
+  }
+
+  job.status = "processing";
+  job.progress = Number.isFinite(progress) && progress > 0
+    ? Math.min(0.95, progress > 1 ? progress / 100 : progress)
+    : Math.min(0.92, (job.progress || 0.05) + 0.04);
+  return job;
+}
+
+function publicVideoJob(job) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    progress: job.progress,
+    ...(job.videoUrl ? { videoUrl: job.videoUrl } : {}),
+    ...(job.error ? { error: job.error } : {}),
+  };
+}
+
+async function requestApiyi(endpoint, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600_000);
+  try {
+    const response = await fetch(`${apiyiBaseUrl.replace(/\/$/, "")}${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${apiyiApiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    const textBody = await response.text();
+    let data;
+    try {
+      data = textBody ? JSON.parse(textBody) : {};
+    } catch {
+      data = { message: textBody };
+    }
+
+    if (!response.ok) {
+      throw new Error(formatProviderError(data, response.status));
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestJxincm(endpoint, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const response = await fetch(`${jxincmBaseUrl.replace(/\/$/, "")}${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${jxincmApiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    const textBody = await response.text();
+    let data;
+    try {
+      data = textBody ? JSON.parse(textBody) : {};
+    } catch {
+      data = { message: textBody };
+    }
+
+    if (!response.ok) {
+      throw new Error(formatProviderError(data, response.status));
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function formatProviderError(data, status) {
+  const candidates = [data?.message, data?.error, data?.detail, data?.msg];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === "object") {
+      return JSON.stringify(candidate).slice(0, 800);
+    }
+  }
+
+  if (data && typeof data === "object" && Object.keys(data).length > 0) {
+    return JSON.stringify(data).slice(0, 800);
+  }
+
+  return `视频服务 HTTP ${status}`;
+}
+
+function extractVideoUrl(content) {
+  const markdownLink = String(content).match(/\((https?:\/\/[^\s)]+\.mp4[^\s)]*)\)/);
+  const plainLink = String(content).match(/https?:\/\/\S+\.mp4\S*/);
+  const videoUrl = markdownLink?.[1] || plainLink?.[0] || "";
+  if (!videoUrl) {
+    throw new Error("视频服务未返回可下载 MP4");
+  }
+  return videoUrl;
+}
+
+async function downloadVideo(videoUrl, outputPath) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  try {
+    const response = await fetch(videoUrl, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`视频下载失败 HTTP ${response.status}`);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    await writeFile(outputPath, bytes);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function generateAudio(text, audioPath) {
