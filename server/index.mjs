@@ -39,9 +39,9 @@ const seedanceApiKey = process.env.ARK_API_KEY || process.env.SEEDANCE_API_KEY |
 const seedanceBaseUrl =
   process.env.SEEDANCE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const seedanceVideoModel =
-  process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-mini-260615";
+  process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-fast-260128";
 const seedanceFallbackVideoModel =
-  process.env.SEEDANCE_FALLBACK_VIDEO_MODEL || "doubao-seedance-2-0-260128";
+  process.env.SEEDANCE_FALLBACK_VIDEO_MODEL || "";
 const seedanceMiniSampleTaskId = process.env.SEEDANCE_MINI_SAMPLE_TASK_ID || "";
 const seedanceRequireMini = process.env.SEEDANCE_REQUIRE_MINI === "true";
 const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
@@ -227,6 +227,7 @@ app.get("/api/health", (_request, response) => {
           seedanceMiniSampleTaskId ? `mini-sample ${seedanceMiniSampleTaskId}` : "",
           !seedanceRequireMini &&
           !seedanceMiniSampleTaskId &&
+          seedanceFallbackVideoModel &&
           seedanceFallbackVideoModel !== seedanceVideoModel
             ? `fallback ${seedanceFallbackVideoModel}`
             : "",
