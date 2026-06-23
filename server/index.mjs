@@ -39,7 +39,12 @@ const seedanceBaseUrl =
   process.env.SEEDANCE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const seedanceVideoModel =
   process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-260128";
-const seedanceVideoDuration = Number(process.env.SEEDANCE_VIDEO_DURATION || 15);
+const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
+const seedanceSegmentDuration = Number(
+  process.env.SEEDANCE_SEGMENT_DURATION ||
+    process.env.SEEDANCE_VIDEO_DURATION ||
+    15,
+);
 const jxincmApiKey = process.env.JXINCM_API_KEY || "";
 const jxincmBaseUrl = process.env.JXINCM_BASE_URL || "https://api.jxincm.cn";
 const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "sora-2-pro";
@@ -284,11 +289,12 @@ app.post("/api/video-jobs", async (request, response) => {
     const prompt = buildVideoPrompt(content, selectedCase);
 
     if (seedanceApiKey) {
-      const remoteTask = await createSeedanceVideo(prompt);
+      const remoteTask = await createSeedanceVideo(content, selectedCase, prompt);
       videoJobs.set(jobId, {
         id: jobId,
         provider: "seedance",
-        remoteId: remoteTask.id,
+        remoteId: remoteTask.ids[0],
+        remoteIds: remoteTask.ids,
         status: "processing",
         progress: 0.05,
         videoUrl: null,
@@ -606,42 +612,87 @@ function buildVideoPrompt(content, selectedCase) {
   ].join(" ");
 }
 
-function buildSeedanceVideoPrompt(prompt) {
+function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
   return [
-    `${prompt}`,
-    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可。",
+    `生成一段中文医院患者宣教视频，这是完整宣教片的第 ${index + 1}/${total} 段。`,
+    `科室：${selectedCase.department}。主题：${selectedCase.project}。患者对象：${selectedCase.audience}。`,
+    `本段重点：${shot.focus}。`,
+    `画面安排：${shot.camera}；${shot.motion}。`,
+    `本段旁白：${shot.voiceover || shot.subtitle}`,
+    `本段字幕：${shot.subtitle}`,
+    `整体宣教摘要：${content.patientBrief}`,
+    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可，段落之间风格一致。",
     "请生成中文女声旁白，语气平稳亲和，尽量让画面分镜、字幕和旁白同步。",
     "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要出现错误医学术语。",
-    "镜头按分镜推进，画面真实、干净、专业，适合给客户演示和患者端预览。",
+    "画面真实、干净、专业，适合给客户演示和患者端预览；不要血腥、不要暴露组织、不要恐怖医疗画面。",
   ].join(" ");
 }
 
-async function createSeedanceVideo(prompt) {
-  const duration =
-    Number.isFinite(seedanceVideoDuration) && seedanceVideoDuration >= 5
-      ? Math.min(15, seedanceVideoDuration)
-      : 15;
-  const payload = {
-    model: seedanceVideoModel,
-    content: [
-      {
-        type: "text",
-        text: buildSeedanceVideoPrompt(prompt),
-      },
-    ],
-    generate_audio: true,
-    ratio: "16:9",
-    duration,
-    watermark: false,
-  };
-  const data = await requestSeedance("/contents/generations/tasks", {
-    method: "POST",
-    body: JSON.stringify(payload),
+async function createSeedanceVideo(content, selectedCase, prompt) {
+  const shots = normalizeDirectorShots(content.directorShots, {
+    directorShots: buildDirectorShots(selectedCase),
   });
-  if (!data?.id) {
-    throw new Error("Seedance 未返回任务 ID");
+  const totalDuration =
+    Number.isFinite(seedanceTotalDuration) && seedanceTotalDuration >= 20
+      ? Math.min(75, seedanceTotalDuration)
+      : 45;
+  const segmentDuration =
+    Number.isFinite(seedanceSegmentDuration) && seedanceSegmentDuration >= 5
+      ? Math.min(15, seedanceSegmentDuration)
+      : 15;
+  const segmentCount = Math.max(
+    2,
+    Math.min(shots.length, Math.ceil(totalDuration / segmentDuration)),
+  );
+  const ids = [];
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const shot = shots[index] || shots[shots.length - 1];
+    const isFinalSegment = index === segmentCount - 1;
+    const remainingDuration = totalDuration - segmentDuration * index;
+    const duration = Math.max(5, Math.min(segmentDuration, remainingDuration));
+    const payload = {
+      model: seedanceVideoModel,
+      content: [
+        {
+          type: "text",
+          text: buildSeedanceSegmentPrompt(content, selectedCase, shot, index, segmentCount),
+        },
+      ],
+      generate_audio: true,
+      ratio: "16:9",
+      duration: isFinalSegment ? Math.round(duration) : segmentDuration,
+      watermark: false,
+    };
+    const data = await requestSeedance("/contents/generations/tasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!data?.id) {
+      throw new Error("Seedance 未返回任务 ID");
+    }
+    ids.push(data.id);
   }
-  return data;
+
+  if (ids.length === 0) {
+    const data = await requestSeedance("/contents/generations/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        model: seedanceVideoModel,
+        content: [{ type: "text", text: prompt }],
+        generate_audio: true,
+        ratio: "16:9",
+        duration: segmentDuration,
+        watermark: false,
+      }),
+    });
+    if (!data?.id) {
+      throw new Error("Seedance 未返回任务 ID");
+    }
+    ids.push(data.id);
+  }
+
+  return { ids };
 }
 
 async function createJxincmVideo(prompt) {
@@ -721,42 +772,78 @@ async function refreshVideoJob(job) {
 }
 
 async function refreshSeedanceJob(job) {
-  const data = await requestSeedance(
-    `/contents/generations/tasks?filter.task_ids=${encodeURIComponent(job.remoteId)}&page_num=1&page_size=1`,
-    { method: "GET" },
-  );
-  const task = Array.isArray(data?.items) ? data.items[0] : data;
-  if (!task) {
+  const remoteIds = Array.isArray(job.remoteIds) && job.remoteIds.length
+    ? job.remoteIds
+    : [job.remoteId].filter(Boolean);
+  const tasks = await Promise.all(remoteIds.map((taskId) => querySeedanceTask(taskId)));
+
+  if (tasks.every((task) => !task)) {
     job.status = "processing";
     job.progress = Math.min(0.92, (job.progress || 0.05) + 0.04);
     return job;
   }
 
-  const rawStatus = String(task.status || "processing").toLowerCase();
-  const videoUrl =
-    task?.content?.video_url ||
-    task?.content?.videoUrl ||
-    task?.content?.url ||
-    task?.video_url ||
-    "";
+  const failedTask = tasks.find((task) => {
+    const rawStatus = String(task?.status || "processing").toLowerCase();
+    return rawStatus === "failed" || rawStatus === "error" || rawStatus === "canceled";
+  });
 
-  if ((rawStatus === "succeeded" || rawStatus === "completed") && videoUrl) {
-    await downloadVideo(videoUrl, job.videoPath);
+  if (failedTask) {
+    job.status = "failed";
+    job.error = formatProviderError(failedTask?.error || failedTask, 500);
+    return job;
+  }
+
+  const completedTasks = tasks.filter((task) => {
+    const rawStatus = String(task?.status || "processing").toLowerCase();
+    return (rawStatus === "succeeded" || rawStatus === "completed") && extractSeedanceVideoUrl(task);
+  });
+
+  if (completedTasks.length === remoteIds.length) {
+    const segmentPaths = [];
+    for (const [index, task] of completedTasks.entries()) {
+      const segmentPath = path.join(generatedDir, `${job.id}-seedance-${index}.mp4`);
+      await downloadVideo(extractSeedanceVideoUrl(task), segmentPath);
+      segmentPaths.push(segmentPath);
+    }
+
+    if (segmentPaths.length === 1) {
+      await rm(job.videoPath, { force: true });
+      await downloadVideo(extractSeedanceVideoUrl(completedTasks[0]), job.videoPath);
+    } else {
+      await stitchVideoSegments(segmentPaths, job.videoPath, job.id);
+    }
+
     job.status = "succeeded";
     job.progress = 1;
     job.videoUrl = `/generated/${job.id}.mp4`;
     return job;
   }
 
-  if (rawStatus === "failed" || rawStatus === "error" || rawStatus === "canceled") {
-    job.status = "failed";
-    job.error = formatProviderError(task?.error || task, 500);
-    return job;
-  }
-
   job.status = "processing";
-  job.progress = Math.min(0.92, (job.progress || 0.05) + 0.04);
+  job.progress = Math.min(
+    0.92,
+    Math.max(job.progress || 0.05, 0.08 + (completedTasks.length / remoteIds.length) * 0.82),
+  );
   return job;
+}
+
+async function querySeedanceTask(taskId) {
+  const data = await requestSeedance(
+    `/contents/generations/tasks?filter.task_ids=${encodeURIComponent(taskId)}&page_num=1&page_size=1`,
+    { method: "GET" },
+  );
+  return Array.isArray(data?.items) ? data.items[0] : data;
+}
+
+function extractSeedanceVideoUrl(task) {
+  return (
+    task?.content?.video_url ||
+    task?.content?.videoUrl ||
+    task?.content?.url ||
+    task?.video_url ||
+    ""
+  );
 }
 
 async function createGoogleVeoVideo(prompt) {
@@ -1064,6 +1151,39 @@ async function downloadVideoWithHeaders(videoUrl, outputPath, headers = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function stitchVideoSegments(segmentPaths, outputPath, id) {
+  const concatPath = path.join(generatedDir, `${id}-seedance-segments.txt`);
+  const concatBody = segmentPaths
+    .map((segmentPath) => `file '${segmentPath.replace(/'/g, "'\\''")}'`)
+    .join("\n");
+  await writeFile(concatPath, `${concatBody}\n`);
+
+  await run("ffmpeg", [
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    concatPath,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "22",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "160k",
+    "-pix_fmt",
+    "yuv420p",
+    outputPath,
+  ]);
+
+  await rm(concatPath, { force: true });
 }
 
 function findGoogleVideo(payload) {
