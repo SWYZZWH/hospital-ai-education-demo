@@ -39,6 +39,8 @@ const seedanceBaseUrl =
   process.env.SEEDANCE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const seedanceVideoModel =
   process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-mini-260615";
+const seedanceFallbackVideoModel =
+  process.env.SEEDANCE_FALLBACK_VIDEO_MODEL || "doubao-seedance-2-0-260128";
 const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
 const seedanceSegmentDuration = Number(
   process.env.SEEDANCE_SEGMENT_DURATION ||
@@ -215,7 +217,7 @@ app.get("/api/health", (_request, response) => {
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
     video: seedanceApiKey
-      ? `seedance ${seedanceVideoModel}`
+      ? `seedance ${seedanceVideoModel}${seedanceFallbackVideoModel !== seedanceVideoModel ? ` fallback ${seedanceFallbackVideoModel}` : ""}`
       : googleVideoApiKey
       ? `gemini ${googleVideoModel}`
       : apiyiApiKey
@@ -695,17 +697,44 @@ async function createSeedanceTask(segment, previousVideoUrl = "") {
     });
   }
 
-  const data = await requestSeedance("/contents/generations/tasks", {
-    method: "POST",
-    body: JSON.stringify({
-      model: seedanceVideoModel,
-      content,
-      generate_audio: true,
-      ratio: "16:9",
-      duration: segment.duration,
-      watermark: false,
-    }),
-  });
+  const payload = {
+    content,
+    generate_audio: true,
+    ratio: "16:9",
+    duration: segment.duration,
+    watermark: false,
+  };
+  let data;
+  try {
+    data = await requestSeedance("/contents/generations/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        model: seedanceVideoModel,
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const canFallback =
+      seedanceFallbackVideoModel &&
+      seedanceFallbackVideoModel !== seedanceVideoModel &&
+      /ModelAPIAccessNotAllowed|ModelNotOpen|not activated/i.test(message);
+    if (!canFallback) {
+      throw error;
+    }
+    console.warn("seedance model fallback", {
+      from: seedanceVideoModel,
+      to: seedanceFallbackVideoModel,
+      message,
+    });
+    data = await requestSeedance("/contents/generations/tasks", {
+      method: "POST",
+      body: JSON.stringify({
+        ...payload,
+        model: seedanceFallbackVideoModel,
+      }),
+    });
+  }
 
   if (!data?.id) {
     throw new Error("Seedance 未返回任务 ID");
