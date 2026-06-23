@@ -42,6 +42,8 @@ const seedanceVideoModel =
   process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-mini-260615";
 const seedanceFallbackVideoModel =
   process.env.SEEDANCE_FALLBACK_VIDEO_MODEL || "doubao-seedance-2-0-260128";
+const seedanceMiniSampleTaskId = process.env.SEEDANCE_MINI_SAMPLE_TASK_ID || "";
+const seedanceRequireMini = process.env.SEEDANCE_REQUIRE_MINI === "true";
 const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
 const seedanceSegmentDuration = Number(
   process.env.SEEDANCE_SEGMENT_DURATION ||
@@ -220,7 +222,15 @@ app.get("/api/health", (_request, response) => {
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
     video: seedanceApiKey
-      ? `seedance ${seedanceVideoModel}${seedanceFallbackVideoModel !== seedanceVideoModel ? ` fallback ${seedanceFallbackVideoModel}` : ""}`
+      ? [
+          `seedance ${seedanceVideoModel}`,
+          seedanceMiniSampleTaskId ? `mini-sample ${seedanceMiniSampleTaskId}` : "",
+          !seedanceRequireMini &&
+          !seedanceMiniSampleTaskId &&
+          seedanceFallbackVideoModel !== seedanceVideoModel
+            ? `fallback ${seedanceFallbackVideoModel}`
+            : "",
+        ].filter(Boolean).join(" ")
       : googleVideoApiKey
       ? `gemini ${googleVideoModel}`
       : apiyiApiKey
@@ -704,8 +714,25 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
 
 async function createSeedanceVideo(content, selectedCase, prompt) {
   const segments = buildSeedanceSegments(content, selectedCase, prompt);
-  const firstTask = await createSeedanceTask(segments[0]);
-  return { ids: [firstTask.id], segments };
+  try {
+    const firstTask = await createSeedanceTask(segments[0]);
+    return { ids: [firstTask.id], segments };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!seedanceMiniSampleTaskId || !isSeedanceMiniAccessError(message)) {
+      throw error;
+    }
+
+    console.warn("seedance mini api unavailable; using cached mini task", {
+      model: seedanceVideoModel,
+      sampleTaskId: seedanceMiniSampleTaskId,
+      message,
+    });
+    return {
+      ids: [seedanceMiniSampleTaskId],
+      segments: [segments[0] || { prompt, duration: 10 }],
+    };
+  }
 }
 
 function buildSeedanceSegments(content, selectedCase, prompt) {
@@ -781,9 +808,11 @@ async function createSeedanceTask(segment, previousVideoUrl = "") {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const canFallback =
+      !seedanceRequireMini &&
+      !seedanceMiniSampleTaskId &&
       seedanceFallbackVideoModel &&
       seedanceFallbackVideoModel !== seedanceVideoModel &&
-      /ModelAPIAccessNotAllowed|ModelNotOpen|not activated/i.test(message);
+      isSeedanceMiniAccessError(message);
     if (!canFallback) {
       throw error;
     }
@@ -805,6 +834,12 @@ async function createSeedanceTask(segment, previousVideoUrl = "") {
     throw new Error("Seedance 未返回任务 ID");
   }
   return data;
+}
+
+function isSeedanceMiniAccessError(message) {
+  return /ModelAPIAccessNotAllowed|ModelNotOpen|not activated|only available in the Playground/i.test(
+    message,
+  );
 }
 
 async function createJxincmVideo(prompt) {
