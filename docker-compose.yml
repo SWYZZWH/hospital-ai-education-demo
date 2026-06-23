@@ -9,7 +9,7 @@ services:
       PORT: "8080"
       LLM_PROXY_BASE_URL: "${LLM_PROXY_BASE_URL:-https://llm-proxy.densematrix.ai}"
       LLM_PROXY_KEY: "${LLM_PROXY_KEY}"
-      LLM_MODEL: "${LLM_MODEL:-gemini-2.5-flash}"
+      LLM_MODEL: "${LLM_MODEL:-gemini-3-flash-preview}"
     volumes:
       - hospital-ai-education-generated:/app/generated
 
