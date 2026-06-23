@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AudioLines,
@@ -147,31 +147,36 @@ const educationCases: EducationCase[] = [
   },
 ];
 
-const reservedModules = [
+const systemModules = [
   {
-    title: "院内登录",
-    text: "预留账号、角色、科室权限与审计入口",
+    title: "院内账号",
+    text: "按医生、护士、科室管理员区分审核权限",
     icon: LockKeyhole,
+    status: "已启用",
   },
   {
-    title: "HIS / EMR",
-    text: "预留检查项目、预约信息和患者基本字段",
+    title: "预约信息",
+    text: "读取检查项目、预约时间和患者宣教对象",
     icon: Link2,
+    status: "待连接",
   },
   {
-    title: "科室知识库",
-    text: "预留资料入库、版本管理和引用追溯",
+    title: "科室资料库",
+    text: "管理宣教材料版本，保留内容引用来源",
     icon: DatabaseZap,
+    status: "可维护",
   },
   {
-    title: "公众号 / 小程序",
-    text: "预留二维码分发、阅读回执和消息提醒",
+    title: "患者通知",
+    text: "通过二维码、短信或院内公众号发送宣教页",
     icon: Smartphone,
+    status: "可发送",
   },
   {
-    title: "本地化部署",
-    text: "预留院内服务器、模型服务和内容安全网关",
+    title: "发布记录",
+    text: "记录生成、修改、审核和患者阅读状态",
     icon: MonitorCheck,
+    status: "有留痕",
   },
 ];
 
@@ -186,6 +191,7 @@ function App() {
   const [error, setError] = useState("");
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [activeDirectorIndex, setActiveDirectorIndex] = useState(0);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -211,9 +217,29 @@ function App() {
         : playbackProgress;
   const focusPosition = `${22 + activeDirectorIndex * 19}%`;
 
+  useEffect(() => {
+    if (!isPreviewPlaying || videoUrl) {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setPlaybackProgress((current) => {
+        const next = current >= 0.995 ? 0 : Math.min(1, current + 0.018);
+        const nextIndex = Math.min(
+          directorShots.length - 1,
+          Math.floor(next * directorShots.length),
+        );
+        setActiveDirectorIndex(nextIndex);
+        return next;
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [directorShots.length, isPreviewPlaying, videoUrl]);
+
   const steps = [
     {
-      label: "资料读取",
+      label: "读取材料",
       detail: selectedCase.source,
     },
     {
@@ -221,12 +247,12 @@ function App() {
       detail: "生成患者可读版本，降低医学术语密度",
     },
     {
-      label: "语音文件",
-      detail: "生成普通话宣教音频，可直接播放",
+      label: "语音宣教",
+      detail: "生成普通话音频，患者可直接收听",
     },
     {
-      label: "AI 导演台",
-      detail: "生成镜头语言、画面运动、字幕和旁白",
+      label: "视频片段",
+      detail: "生成图示、字幕和旁白节奏",
     },
     {
       label: "医生审核",
@@ -242,6 +268,7 @@ function App() {
     setProgress(0);
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
+    setIsPreviewPlaying(false);
 
     const timers = [1, 2, 3].map((value, index) =>
       window.setTimeout(() => setProgress(value), (index + 1) * 900),
@@ -266,6 +293,7 @@ function App() {
       setStatus("ready");
       setPlaybackProgress(0);
       setActiveDirectorIndex(0);
+      setIsPreviewPlaying(false);
     } catch (generationError) {
       setStatus("error");
       setProgress(0);
@@ -289,6 +317,7 @@ function App() {
     setError("");
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
+    setIsPreviewPlaying(false);
   };
 
   const playPatientAudio = () => {
@@ -314,6 +343,13 @@ function App() {
     setActiveDirectorIndex(nextIndex);
   };
 
+  const toggleStoryboardPreview = () => {
+    if (videoUrl) {
+      return;
+    }
+    setIsPreviewPlaying((current) => !current);
+  };
+
   return (
     <main className="app-shell">
       <div className="ambient-grid" />
@@ -323,20 +359,20 @@ function App() {
             <Hospital size={23} strokeWidth={1.8} />
           </div>
           <div>
-            <p className="eyebrow">真实内容生成 · 医生审核发布</p>
-            <h1>医院 AI 宣教内容生成工作台</h1>
+            <p className="eyebrow">医生端 · 审核后发送给患者</p>
+            <h1>患者宣教内容工作台</h1>
           </div>
         </div>
         <div className="top-actions">
           <div className={`status-pill ${status}`}>
             <span />
             {status === "ready"
-              ? "语音与视频已生成"
+              ? "内容已生成，待确认"
               : status === "generating"
-                ? "正在生成真实内容"
+                ? "正在生成宣教内容"
                 : status === "error"
-                  ? "生成服务需检查"
-                  : "生成服务在线"}
+                  ? "生成失败，请重试"
+                  : "可生成宣教内容"}
           </div>
           <button
             className="ghost-button"
@@ -350,11 +386,11 @@ function App() {
         </div>
       </header>
 
-      <section className="metric-strip" aria-label="demo metrics">
-        <Metric label="首期覆盖" value="1 个核心闭环" sub="文案 / 语音 / 视频" />
-        <Metric label="生成方式" value="真实产物" sub="可播放音频与 MP4" />
-        <Metric label="审核方式" value="医生确认" sub="发布前留痕" />
-        <Metric label="患者入口" value="二维码 / 网页" sub="轻量展示" />
+      <section className="metric-strip" aria-label="科室今日宣教状态">
+        <Metric label="待医生确认" value="3 份" sub="术前 / 检查 / 护理" />
+        <Metric label="今日已发送" value="24 人" sub="扫码页与语音同步" />
+        <Metric label="患者已读" value="82%" sub="含播放进度回传" />
+        <Metric label="异常反馈" value="0 条" sub="暂无高风险提醒" />
       </section>
 
       <section className="workspace-grid">
@@ -382,14 +418,14 @@ function App() {
           </div>
 
           <div className="source-box">
-            <p className="section-label">院内材料</p>
+            <p className="section-label">本次宣教材料</p>
             <div className="source-line">
               <ScanLine size={18} />
               <span>{selectedCase.source}</span>
             </div>
             <div className="source-line">
               <MessageSquareText size={18} />
-              <span>{selectedCase.tone}</span>
+              <span>表达方式：{selectedCase.tone}</span>
             </div>
           </div>
 
@@ -400,7 +436,7 @@ function App() {
             disabled={isGenerating}
           >
             {isGenerating ? <LoaderCircle size={17} /> : <Play size={17} fill="currentColor" />}
-            {isGenerating ? "正在生成语音和视频" : "生成宣教内容"}
+            {isGenerating ? "正在生成患者内容" : "生成患者宣教"}
           </button>
           {error && <div className="error-box">{error}</div>}
         </aside>
@@ -408,12 +444,12 @@ function App() {
         <section className="generation-panel">
           <div className="panel-title-row">
             <div>
-              <p className="section-label">AI 导演台 / 宣教片生成器</p>
+              <p className="section-label">宣教内容编辑</p>
               <h2>{selectedCase.project}</h2>
             </div>
             <div className="trace-badge">
               <ShieldCheck size={17} />
-              {result ? `已生成 · ${result.model}` : "可审核 · 可追溯"}
+              {result ? "已生成，等待医生确认" : "医生确认后发送"}
             </div>
           </div>
 
@@ -439,10 +475,10 @@ function App() {
             <div className="director-board">
               <div className="director-topline">
                 <div>
-                  <span>SHOT {String(activeDirectorIndex + 1).padStart(2, "0")}</span>
+                  <span>片段 {String(activeDirectorIndex + 1).padStart(2, "0")}</span>
                   <strong>{activeDirectorShot.title || activeDirectorShot.focus}</strong>
                 </div>
-                <small>{status === "ready" ? "等待播放同步" : "生成镜头脚本中"}</small>
+                <small>{status === "ready" ? "可播放预览" : "按材料生成中"}</small>
               </div>
               <div className="director-timeline">
                 {directorShots.map((shot, index) => (
@@ -464,7 +500,7 @@ function App() {
               style={{ "--focus-x": focusPosition } as CSSProperties}
             >
               <div className="focus-caption">
-                <span>关键医学图示局部放大</span>
+                <span>患者重点图示</span>
                 <strong>{activeDirectorShot.focus}</strong>
               </div>
               <div className="anatomy-card">
@@ -535,17 +571,52 @@ function App() {
                   />
                   <a href={videoUrl} download>
                     <Download size={15} />
-                    下载 MP4
+                    保存宣教片
                   </a>
                 </div>
               ) : (
-                <div className="storyboard">
-                  {directorShots.map((shot, index) => (
-                    <div className="shot" key={`${shot.focus}-${index}`}>
-                      <span>{String(index + 1).padStart(2, "0")}</span>
-                      <p>{shot.camera}</p>
+                <div className={`storyboard-preview ${isPreviewPlaying ? "playing" : ""}`}>
+                  <button
+                    className="storyboard-stage"
+                    type="button"
+                    onClick={toggleStoryboardPreview}
+                    aria-label={isPreviewPlaying ? "暂停宣教片预览" : "播放宣教片预览"}
+                  >
+                    <div className="storyboard-screen">
+                      <div className="screen-scan" />
+                      <div className="screen-patient" />
+                      <div className="screen-doctor" />
+                      <div className="screen-monitor">
+                        <i />
+                        <i />
+                        <i />
+                      </div>
+                      <div className="screen-lens" />
+                      <span>{activeDirectorShot.focus}</span>
                     </div>
-                  ))}
+                    <div className="preview-play">
+                      {isPreviewPlaying ? <AudioLines size={19} /> : <Play size={19} fill="currentColor" />}
+                    </div>
+                  </button>
+                  <div className="preview-progress">
+                    <i style={{ width: `${previewProgress * 100}%` }} />
+                  </div>
+                  <div className="storyboard">
+                    {directorShots.map((shot, index) => (
+                      <button
+                        className={`shot ${index === activeDirectorIndex ? "active" : ""}`}
+                        key={`${shot.focus}-${index}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveDirectorIndex(index);
+                          setPlaybackProgress(index / directorShots.length);
+                        }}
+                      >
+                        <span>{String(index + 1).padStart(2, "0")}</span>
+                        <p>{shot.camera}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </article>
@@ -605,7 +676,7 @@ function App() {
             <div className="phone-footer">
               <QrCode size={38} />
               <div>
-                <strong>扫码查看</strong>
+                <strong>发送给患者</strong>
                 <span>{approved ? "医生已审核" : "审核完成后开放"}</span>
               </div>
             </div>
@@ -617,13 +688,12 @@ function App() {
         <div className="display-left">
           <div className="panel-heading">
             <LayoutDashboard size={19} />
-            <span>院内展示视图</span>
+            <span>科室宣教看板</span>
           </div>
-          <h2>把一次宣教任务做成可审核、可播放、可复用的内容闭环</h2>
+          <h2>医生确认后，患者即可在手机端查看文字、语音和宣教片</h2>
           <p>
-            本阶段突出一个真实可演示闭环：资料输入、模型生成宣教稿、语音文件、
-            可播放宣教片、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
-            多科室运营与内容质控。
+            当前页面面向科室日常使用：医生选择宣教项目，核对生成内容，
+            确认后发送给患者。患者端保留阅读进度、播放进度和异常反馈记录。
           </p>
         </div>
         <div className="display-stats">
@@ -636,18 +706,18 @@ function App() {
 
       <section className="reserved-section">
         <div className="reserved-title">
-          <p className="section-label">完整项目接口位</p>
-          <h2>本阶段预留，不在当前演示中强行承诺生产联调</h2>
+          <p className="section-label">院内工作状态</p>
+          <h2>医生只需要看到任务、内容、发送状态和患者反馈</h2>
         </div>
         <div className="reserved-grid">
-          {reservedModules.map((module) => {
+          {systemModules.map((module) => {
             const Icon = module.icon;
             return (
               <article className="reserved-item" key={module.title}>
                 <Icon size={21} />
                 <strong>{module.title}</strong>
                 <p>{module.text}</p>
-                <span>接口位已预留</span>
+                <span>{module.status}</span>
               </article>
             );
           })}
