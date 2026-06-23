@@ -588,7 +588,7 @@ function App() {
                         }}
                       >
                         <span>{String(index + 1).padStart(2, "0")}</span>
-                        <p>{shot.camera}</p>
+                        <p>{shot.subtitle}</p>
                       </button>
                     ))}
                   </div>
