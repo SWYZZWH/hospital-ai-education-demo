@@ -19,6 +19,16 @@ const llmBaseUrl =
 const llmModel = process.env.LLM_MODEL || "gemini-2.5-flash";
 const llmKey = process.env.LLM_PROXY_KEY || "";
 const exposeLocalVideo = process.env.EXPOSE_LOCAL_VIDEO === "true";
+const googleVideoApiKey =
+  process.env.GEMINI_API_KEY ||
+  process.env.GOOGLE_API_KEY ||
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+  "";
+const googleVideoBaseUrl =
+  process.env.GEMINI_VIDEO_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
+const googleVideoModel = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-fast-generate-preview";
+const googleVideoDuration = Number(process.env.GEMINI_VIDEO_DURATION || 8);
+const googleVideoResolution = process.env.GEMINI_VIDEO_RESOLUTION || "720p";
 const apiyiApiKey = process.env.APIYI_KEY || "";
 const apiyiBaseUrl = process.env.APIYI_BASE_URL || "https://api.apiyi.com/v1";
 const apiyiVideoModel = process.env.APIYI_VIDEO_MODEL || "veo-3.1-fast";
@@ -191,7 +201,9 @@ app.get("/api/health", (_request, response) => {
     ok: true,
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
-    video: apiyiApiKey
+    video: googleVideoApiKey
+      ? `gemini ${googleVideoModel}`
+      : apiyiApiKey
       ? `apiyi ${apiyiVideoModel}`
       : jxincmApiKey
         ? `jxincm ${jxincmModel}`
@@ -226,7 +238,9 @@ app.post("/api/generate", async (request, response) => {
       model: generation.model,
       content,
       audioUrl: `/generated/${id}.mp3`,
-      videoGenerationAvailable: Boolean(apiyiApiKey || jxincmApiKey || exposeLocalVideo),
+      videoGenerationAvailable: Boolean(
+        googleVideoApiKey || apiyiApiKey || jxincmApiKey || exposeLocalVideo,
+      ),
       ...(videoUrl ? { videoUrl } : {}),
     });
   } catch (error) {
@@ -239,7 +253,7 @@ app.post("/api/generate", async (request, response) => {
 });
 
 app.post("/api/video-jobs", async (request, response) => {
-  if (!apiyiApiKey && !jxincmApiKey && !exposeLocalVideo) {
+  if (!googleVideoApiKey && !apiyiApiKey && !jxincmApiKey && !exposeLocalVideo) {
     response.status(503).json({
       error: "视频生成服务尚未配置",
     });
@@ -258,6 +272,29 @@ app.post("/api/video-jobs", async (request, response) => {
     await mkdir(generatedDir, { recursive: true });
 
     const prompt = buildVideoPrompt(content, selectedCase);
+
+    if (googleVideoApiKey) {
+      const remoteTask = await createGoogleVeoVideo(prompt);
+      videoJobs.set(jobId, {
+        id: jobId,
+        provider: "google-veo",
+        remoteId: remoteTask.name,
+        status: "processing",
+        progress: 0.05,
+        videoUrl: null,
+        error: "",
+        createdAt: Date.now(),
+        videoPath,
+        prompt,
+      });
+
+      response.json({
+        jobId,
+        status: "processing",
+        progress: 0.05,
+      });
+      return;
+    }
 
     if (apiyiApiKey) {
       const videoUrl = await createApiyiVideo(prompt, videoPath);
@@ -576,6 +613,10 @@ async function refreshVideoJob(job) {
     return job;
   }
 
+  if (job.provider === "google-veo") {
+    return refreshGoogleVeoJob(job);
+  }
+
   const data = await requestJxincm(`/v1/video/query?id=${encodeURIComponent(job.remoteId)}`, {
     method: "GET",
   });
@@ -601,6 +642,59 @@ async function refreshVideoJob(job) {
   job.progress = Number.isFinite(progress) && progress > 0
     ? Math.min(0.95, progress > 1 ? progress / 100 : progress)
     : Math.min(0.92, (job.progress || 0.05) + 0.04);
+  return job;
+}
+
+async function createGoogleVeoVideo(prompt) {
+  const durationSeconds =
+    Number.isFinite(googleVideoDuration) && googleVideoDuration >= 4
+      ? Math.min(8, googleVideoDuration)
+      : 8;
+  const payload = {
+    instances: [{ prompt }],
+    parameters: {
+      aspectRatio: "16:9",
+      durationSeconds,
+      resolution: googleVideoResolution,
+      personGeneration: "allow_all",
+    },
+  };
+  const data = await requestGoogleVeo(`/models/${googleVideoModel}:predictLongRunning`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!data?.name) {
+    throw new Error("Veo 未返回任务 ID");
+  }
+  return data;
+}
+
+async function refreshGoogleVeoJob(job) {
+  const data = await requestGoogleVeo(`/${job.remoteId}`, { method: "GET" });
+
+  if (data?.error) {
+    job.status = "failed";
+    job.error = formatProviderError(data.error, data.error.code || 500);
+    return job;
+  }
+
+  if (!data?.done) {
+    job.status = "processing";
+    job.progress = Math.min(0.92, (job.progress || 0.05) + 0.05);
+    return job;
+  }
+
+  const video = findGoogleVideo(data.response || data);
+  if (!video) {
+    job.status = "failed";
+    job.error = "Veo 已完成但未返回可下载视频";
+    return job;
+  }
+
+  await downloadGoogleVideo(video, job.videoPath);
+  job.status = "succeeded";
+  job.progress = 1;
+  job.videoUrl = `/generated/${job.id}.mp4`;
   return job;
 }
 
@@ -678,6 +772,38 @@ async function requestJxincm(endpoint, options) {
   }
 }
 
+async function requestGoogleVeo(endpoint, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  try {
+    const response = await fetch(`${googleVideoBaseUrl.replace(/\/$/, "")}${endpoint}`, {
+      ...options,
+      headers: {
+        "x-goog-api-key": googleVideoApiKey,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    const textBody = await response.text();
+    let data;
+    try {
+      data = textBody ? JSON.parse(textBody) : {};
+    } catch {
+      data = { message: textBody };
+    }
+
+    if (!response.ok) {
+      throw new Error(formatProviderError(data, response.status));
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function formatProviderError(data, status) {
   const candidates = [data?.message, data?.error, data?.detail, data?.msg];
   for (const candidate of candidates) {
@@ -722,6 +848,115 @@ async function downloadVideo(videoUrl, outputPath) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function downloadGoogleVideo(video, outputPath) {
+  if (video.videoBytes) {
+    await writeFile(outputPath, Buffer.from(video.videoBytes, "base64"));
+    return;
+  }
+
+  const candidates = [
+    video.downloadUri,
+    video.downloadUrl,
+    video.uri,
+    video.url,
+    video.fileUri,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const url = String(candidate);
+    if (url.startsWith("http")) {
+      await downloadVideoWithHeaders(rewriteGoogleUrl(url), outputPath, {
+        "x-goog-api-key": googleVideoApiKey,
+      });
+      return;
+    }
+  }
+
+  if (video.name) {
+    const normalizedName = String(video.name).replace(/^\//, "");
+    const downloadEndpoints = [
+      `/${normalizedName}:download`,
+      `/${normalizedName}?alt=media`,
+    ];
+    for (const endpoint of downloadEndpoints) {
+      try {
+        await downloadVideoWithHeaders(
+          `${googleVideoBaseUrl.replace(/\/$/, "")}${endpoint}`,
+          outputPath,
+          { "x-goog-api-key": googleVideoApiKey },
+        );
+        return;
+      } catch {
+        // Try the next documented Files API download shape.
+      }
+    }
+  }
+
+  throw new Error("Veo 未返回可下载视频地址");
+}
+
+function rewriteGoogleUrl(url) {
+  const officialBase = "https://generativelanguage.googleapis.com/v1beta";
+  const configuredBase = googleVideoBaseUrl.replace(/\/$/, "");
+  return url.startsWith(officialBase)
+    ? `${configuredBase}${url.slice(officialBase.length)}`
+    : url;
+}
+
+async function downloadVideoWithHeaders(videoUrl, outputPath, headers = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 180_000);
+  try {
+    const response = await fetch(videoUrl, { headers, signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`视频下载失败 HTTP ${response.status}`);
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    await writeFile(outputPath, bytes);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function findGoogleVideo(payload) {
+  const queue = [payload];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") {
+      continue;
+    }
+
+    if (typeof current.videoBytes === "string") {
+      return { videoBytes: current.videoBytes };
+    }
+
+    const url = current.downloadUri || current.downloadUrl || current.uri || current.url || current.fileUri;
+    if (typeof url === "string" && url) {
+      return {
+        downloadUri: current.downloadUri,
+        downloadUrl: current.downloadUrl,
+        uri: current.uri,
+        url: current.url,
+        fileUri: current.fileUri,
+        name: current.name,
+      };
+    }
+
+    if (typeof current.name === "string" && /^files\//.test(current.name)) {
+      return { name: current.name };
+    }
+
+    for (const value of Object.values(current)) {
+      if (Array.isArray(value)) {
+        queue.push(...value);
+      } else if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+  return null;
 }
 
 async function generateAudio(text, audioPath) {
