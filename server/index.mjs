@@ -800,18 +800,33 @@ async function refreshSeedanceJob(job) {
   });
 
   if (completedTasks.length === remoteIds.length) {
-    const segmentPaths = [];
-    for (const [index, task] of completedTasks.entries()) {
-      const segmentPath = path.join(generatedDir, `${job.id}-seedance-${index}.mp4`);
-      await downloadVideo(extractSeedanceVideoUrl(task), segmentPath);
-      segmentPaths.push(segmentPath);
-    }
+    try {
+      const segmentPaths = [];
+      for (const [index, task] of completedTasks.entries()) {
+        const segmentPath = path.join(generatedDir, `${job.id}-seedance-${index}.mp4`);
+        await downloadVideo(extractSeedanceVideoUrl(task), segmentPath);
+        segmentPaths.push(segmentPath);
+      }
 
-    if (segmentPaths.length === 1) {
-      await rm(job.videoPath, { force: true });
-      await downloadVideo(extractSeedanceVideoUrl(completedTasks[0]), job.videoPath);
-    } else {
-      await stitchVideoSegments(segmentPaths, job.videoPath, job.id);
+      if (segmentPaths.length === 1) {
+        await rm(job.videoPath, { force: true });
+        await downloadVideo(extractSeedanceVideoUrl(completedTasks[0]), job.videoPath);
+      } else {
+        await stitchVideoSegments(segmentPaths, job.videoPath, job.id);
+      }
+    } catch (error) {
+      job.downloadAttempts = (job.downloadAttempts || 0) + 1;
+      if (job.downloadAttempts < 5) {
+        console.warn("seedance video download/stitch retry", {
+          jobId: job.id,
+          attempt: job.downloadAttempts,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        job.status = "processing";
+        job.progress = 0.94;
+        return job;
+      }
+      throw error;
     }
 
     job.status = "succeeded";
@@ -1069,18 +1084,28 @@ function extractVideoUrl(content) {
 }
 
 async function downloadVideo(videoUrl, outputPath) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120_000);
-  try {
-    const response = await fetch(videoUrl, { signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`视频下载失败 HTTP ${response.status}`);
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 600_000);
+    try {
+      const response = await fetch(videoUrl, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`视频下载失败 HTTP ${response.status}`);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      await writeFile(outputPath, bytes);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) {
+        await sleep(1500 * attempt);
+      }
+    } finally {
+      clearTimeout(timer);
     }
-    const bytes = Buffer.from(await response.arrayBuffer());
-    await writeFile(outputPath, bytes);
-  } finally {
-    clearTimeout(timer);
   }
+  throw lastError;
 }
 
 async function downloadGoogleVideo(video, outputPath) {
@@ -1613,5 +1638,11 @@ function run(command, args) {
         reject(new Error(`${command} exited with ${code}: ${stderr.slice(-1200)}`));
       }
     });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
   });
 }
