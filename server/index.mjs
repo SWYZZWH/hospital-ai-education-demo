@@ -465,12 +465,12 @@ app.listen(port, "0.0.0.0", () => {
 async function generateContent(selectedCase, doctorNotes) {
   const fallback = fallbackContent(selectedCase, doctorNotes);
   const prompt = [
-    "你是医院患者宣教内容生成助手。",
-    "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文宣教内容。",
+    "你是医院患者注意事项生成助手。",
+    "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文注意事项。",
     "要求：只输出 JSON，不输出 Markdown；不要诊断、不要替代医生医嘱；避免技术实现、模型名称和内部术语；语气专业、清楚、安抚。",
     "同时生成患者查看素材，每一段都要像患者真正会看到的步骤说明，避免项目介绍、模型名称和技术实现描述。",
-    "语音宣教必须由你重新撰写，不要套用输入材料原句，不要像模板拼接；narration 要像真实护士/医生对患者说话，口语自然但医学谨慎。",
-    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，260-380 字。",
+    "语音内容必须由你重新撰写，不要套用输入材料原句，不要像模板拼接；narration 要像真实护士/医生直接对患者说话，口语自然但医学谨慎，不要出现“宣教”等后台工作用词。",
+    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，260-380 字，面向患者。",
     `科室：${selectedCase.department}`,
     `项目：${selectedCase.project}`,
     `患者对象：${selectedCase.audience}`,
@@ -496,7 +496,7 @@ async function generateContent(selectedCase, doctorNotes) {
           {
             role: "system",
             content:
-    "你只生成医院宣教内容 JSON，必须患者友好、事实谨慎、可由医生审核。narration 必须是模型原创的完整中文语音宣教稿，不要输出模板句。",
+    "你只生成医院患者注意事项 JSON，必须患者友好、事实谨慎、可由医生审核。narration 必须是面向患者的完整中文语音内容，不要出现“宣教”等后台工作用词。",
           },
           { role: "user", content: prompt },
         ],
@@ -536,8 +536,8 @@ async function generateGeminiContent(prompt, fallback) {
               parts: [
                 {
                   text: [
-                    "你只生成医院宣教内容 JSON，必须患者友好、事实谨慎、可由医生审核。",
-                    "narration 必须是模型原创的完整中文语音宣教稿，不要输出模板句。",
+                    "你只生成医院患者注意事项 JSON，必须患者友好、事实谨慎、可由医生审核。",
+                    "narration 必须是面向患者的完整中文语音内容，不要出现“宣教”等后台工作用词。",
                     prompt,
                   ].join("\n"),
                 },
@@ -568,7 +568,7 @@ async function generateGeminiContent(prompt, fallback) {
 function fallbackContent(selectedCase, doctorNotes) {
   const notes = doctorNotes ? `医生补充提醒：${doctorNotes}` : "";
   const directorShots = buildDirectorShots(selectedCase);
-  return {
+  const content = {
     patientTitle: selectedCase.patientTitle,
     patientBrief: notes
       ? `${selectedCase.patientBrief} ${notes}`.slice(0, 180)
@@ -577,12 +577,10 @@ function fallbackContent(selectedCase, doctorNotes) {
     storyboard: selectedCase.storyboard,
     directorShots,
     warnings: selectedCase.warnings,
-    narration: [
-      `您好，下面为您说明${selectedCase.project}的主要注意事项。`,
-      selectedCase.patientBrief,
-      directorShots.map((shot) => shot.voiceover).join("。"),
-      "以上内容仅用于就诊前宣教，具体安排请以医生和现场工作人员指导为准。",
-    ].join(""),
+  };
+  return {
+    ...content,
+    narration: buildPatientNarration(content),
   };
 }
 
@@ -661,16 +659,30 @@ function sanitizeText(value) {
 }
 
 function buildNarration(content) {
-  const narration = sanitizeText(content.narration);
-  if (narration.length > 80) {
-    return narration;
-  }
+  return buildPatientNarration(content);
+}
+
+function buildPatientNarration(content) {
+  const points = Array.isArray(content.points) ? content.points.map(cleanNarrationText).filter(Boolean) : [];
+  const warnings = Array.isArray(content.warnings) ? content.warnings.map(cleanNarrationText).filter(Boolean) : [];
+  const brief = cleanNarrationText(content.patientBrief);
   return [
-    content.patientTitle,
-    content.patientBrief,
-    content.points.join("。"),
-    "具体检查和治疗安排请以医生审核后的通知为准。",
-  ].join("。");
+    "您好，您需要注意以下事项。",
+    brief ? `${brief}。` : "",
+    ...points.map((point, index) => `${chineseOrdinal(index)}，${point}。`),
+    warnings.length ? `请特别留意${warnings.join("、")}等情况，如有不适或疑问，请及时联系医护人员。` : "",
+    "具体检查和治疗安排，请以医生审核后的通知为准。",
+  ].filter(Boolean).join("");
+}
+
+function cleanNarrationText(value) {
+  return sanitizeText(value)
+    .replace(/宣教/g, "说明")
+    .replace(/[。；;,.，、\s]+$/g, "");
+}
+
+function chineseOrdinal(index) {
+  return ["第一", "第二", "第三", "第四", "第五"][index] || `第 ${index + 1}`;
 }
 
 function buildVideoPrompt(content, selectedCase) {

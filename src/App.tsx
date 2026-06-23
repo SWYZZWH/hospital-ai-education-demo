@@ -227,7 +227,7 @@ function App() {
       icon: FileText,
     },
     {
-      label: "语音宣教",
+      label: "语音提醒",
       detail: "生成普通话音频，患者可直接收听",
       icon: FileAudio,
     },
@@ -573,7 +573,7 @@ function App() {
               <article className="artifact audio-artifact">
                 <div className="artifact-head">
                   <AudioLines size={18} />
-                  <span>语音宣教</span>
+                  <span>患者语音提醒</span>
                 </div>
                 <audio ref={audioRef} className="audio-player" controls src={audioUrl} />
                 <div className="audio-meta">
@@ -660,11 +660,11 @@ function App() {
                   className="mini-player ready"
                   type="button"
                   onClick={playPatientAudio}
-                  aria-label="播放语音宣教"
+                  aria-label="播放语音提醒"
                 >
                   <FileAudio size={19} />
                   <div className="player-text">
-                    <strong>语音宣教</strong>
+                    <strong>语音提醒</strong>
                     <span>已生成，可播放</span>
                   </div>
                   <span className="mini-play-icon">
