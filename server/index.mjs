@@ -3,7 +3,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import sharp from "sharp";
 
@@ -101,7 +101,7 @@ app.get("/api/health", (_request, response) => {
     ok: true,
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
-    video: "ffmpeg mp4 storyboard renderer",
+    video: "ffmpeg mp4 storyboard animation renderer",
   });
 });
 
@@ -283,7 +283,6 @@ async function generateAudio(text, audioPath) {
 }
 
 async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
-  const slidePaths = [];
   const segmentPaths = [];
   const audioDuration = await getMediaDuration(audioPath);
   const scenes = [
@@ -298,22 +297,17 @@ async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
       body: item,
     })),
   ];
-  const sceneDuration = Math.max(audioDuration / scenes.length, 3.2);
+  const sceneDuration = audioDuration / scenes.length;
 
   for (const [index, scene] of scenes.entries()) {
-    const slidePath = path.join(generatedDir, `${id}-slide-${index}.png`);
-    await sharp(Buffer.from(renderSlide(scene, selectedCase, index)))
-      .png()
-      .toFile(slidePath);
-    slidePaths.push(slidePath);
-
     const segmentPath = path.join(generatedDir, `${id}-segment-${index}.mp4`);
-    await renderAnimatedSegment(
-      slidePath,
+    await renderStoryboardSegment(
+      scene,
+      selectedCase,
       segmentPath,
       sceneDuration,
-      selectedCase.accent,
       index,
+      id,
     );
     segmentPaths.push(segmentPath);
   }
@@ -351,45 +345,56 @@ async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
   ]);
 }
 
-async function renderAnimatedSegment(imagePath, segmentPath, duration, accent, index) {
-  const frames = Math.max(1, Math.round(duration * 30));
-  const fadeOutStart = Math.max(duration - 0.55, 0.1);
-  const color = hexToFfmpegColor(accent);
-  const drift = index % 2 === 0 ? "sin(on/22)*18" : "cos(on/20)*16";
-  const zoom = index % 2 === 0 ? "min(zoom+0.0012,1.07)" : "max(1.07-on*0.0011,1.0)";
-  const filter = [
-    `scale=1280:720`,
-    `zoompan=z='${zoom}':x='iw/2-(iw/zoom/2)+${drift}':y='ih/2-(ih/zoom/2)+sin(on/28)*10':d=${frames}:s=1280x720:fps=30`,
-    `fade=t=in:st=0:d=0.35`,
-    `fade=t=out:st=${fadeOutStart.toFixed(3)}:d=0.5`,
-    `drawbox=x=86:y=642:w='min((iw-172)*t/${duration.toFixed(3)},iw-172)':h=12:color=${color}@0.85:t=fill`,
-    `drawbox=x='1018+sin(t*3.2)*12':y='112+cos(t*2.4)*10':w=88:h=88:color=${color}@0.16:t=fill`,
-    `format=yuv420p`,
-  ].join(",");
+async function renderStoryboardSegment(scene, selectedCase, segmentPath, duration, index, id) {
+  const fps = 8;
+  const frameCount = Math.max(18, Math.round(duration * fps));
+  const frameDir = path.join(generatedDir, `${id}-scene-${index}`);
+  await mkdir(frameDir, { recursive: true });
 
-  await run("ffmpeg", [
-    "-y",
-    "-loop",
-    "1",
-    "-i",
-    imagePath,
-    "-t",
-    duration.toFixed(3),
-    "-vf",
-    filter,
-    "-an",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "22",
-    "-r",
-    "30",
-    "-pix_fmt",
-    "yuv420p",
-    segmentPath,
-  ]);
+  try {
+    let nextFrame = 0;
+    const renderFrame = async () => {
+      const frameIndex = nextFrame;
+      nextFrame += 1;
+      if (frameIndex >= frameCount) {
+        return;
+      }
+      const progress = frameCount <= 1 ? 1 : frameIndex / (frameCount - 1);
+      const framePath = path.join(
+        frameDir,
+        `frame-${String(frameIndex).padStart(4, "0")}.png`,
+      );
+      await sharp(Buffer.from(renderStoryboardFrame(scene, selectedCase, index, progress)))
+        .png()
+        .toFile(framePath);
+      await renderFrame();
+    };
+    await Promise.all(Array.from({ length: 4 }, () => renderFrame()));
+
+    await run("ffmpeg", [
+      "-y",
+      "-framerate",
+      String(fps),
+      "-i",
+      path.join(frameDir, "frame-%04d.png"),
+      "-t",
+      duration.toFixed(3),
+      "-an",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "21",
+      "-r",
+      "24",
+      "-pix_fmt",
+      "yuv420p",
+      segmentPath,
+    ]);
+  } finally {
+    await rm(frameDir, { recursive: true, force: true });
+  }
 }
 
 async function getMediaDuration(filePath) {
@@ -409,48 +414,195 @@ async function getMediaDuration(filePath) {
   return duration;
 }
 
-function renderSlide(scene, selectedCase, index) {
-  const titleLines = wrapText(scene.title, 16, 2);
-  const bodyLines = wrapText(scene.body, 24, 4);
+function renderStoryboardFrame(scene, selectedCase, index, progress) {
   const accent = selectedCase.accent;
+  const sceneProgress = easeInOut(progress);
+  const titleLines = wrapText(scene.title, 15, 2);
+  const subtitleLines = wrapText(scene.body, 26, 3);
   const titleSvg = titleLines
-    .map((line, lineIndex) => text(line, 96, 250 + lineIndex * 74, 56, 900))
+    .map((line, lineIndex) => text(line, 78, 124 + lineIndex * 50, 38, 900))
     .join("");
-  const bodySvg = bodyLines
-    .map((line, lineIndex) => text(line, 100, 455 + lineIndex * 48, 30, 500))
+  const subtitleSvg = subtitleLines
+    .map((line, lineIndex) => text(line, 102, 607 + lineIndex * 35, 24, 600, "#eaf6f2"))
     .join("");
+  const sceneArt = renderClinicalScene(selectedCase, index, sceneProgress);
+  const stepCards = renderStepCards(index, sceneProgress, accent);
+  const progressWidth = 1010 * progress;
+  const pulse = 0.54 + Math.sin(progress * Math.PI * 8) * 0.08;
 
   return `
   <svg width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-        <stop offset="0" stop-color="#f9fbf8"/>
-        <stop offset="0.62" stop-color="#edf7f4"/>
-        <stop offset="1" stop-color="#f8f0e7"/>
+        <stop offset="0" stop-color="#f7fbfa"/>
+        <stop offset="0.54" stop-color="#eef7f4"/>
+        <stop offset="1" stop-color="#fff3e6"/>
       </linearGradient>
-      <linearGradient id="panel" x1="0" x2="1">
+      <linearGradient id="deep" x1="0" x2="1">
         <stop offset="0" stop-color="${accent}"/>
         <stop offset="1" stop-color="#142328"/>
       </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#09252a" flood-opacity="0.16"/>
+      </filter>
     </defs>
     <rect width="1280" height="720" fill="url(#bg)"/>
-    <circle cx="1090" cy="90" r="220" fill="${accent}" opacity="0.12"/>
-    <circle cx="104" cy="638" r="180" fill="#142328" opacity="0.08"/>
-    <rect x="58" y="54" width="1164" height="612" rx="42" fill="white" opacity="0.76"/>
-    <rect x="96" y="92" width="282" height="50" rx="25" fill="${accent}" opacity="0.16"/>
-    ${text(scene.label, 126, 126, 24, 800, accent)}
-    ${text("医院宣教内容生成中心", 920, 126, 24, 800, "#31444d")}
-    <rect x="96" y="188" width="84" height="84" rx="28" fill="url(#panel)"/>
-    ${text(String(index + 1).padStart(2, "0"), 120, 244, 36, 900, "#ffffff")}
+    <circle cx="${1040 - sceneProgress * 42}" cy="${94 + Math.sin(progress * Math.PI * 2) * 12}" r="230" fill="${accent}" opacity="0.10"/>
+    <circle cx="${152 + sceneProgress * 52}" cy="624" r="190" fill="#142328" opacity="0.07"/>
+    <rect x="44" y="40" width="1192" height="638" rx="44" fill="white" opacity="0.82" filter="url(#shadow)"/>
+    <rect x="72" y="64" width="530" height="116" rx="32" fill="#ffffff" opacity="0.85"/>
+    <rect x="78" y="78" width="172" height="38" rx="19" fill="${accent}" opacity="0.14"/>
+    ${text(scene.label, 104, 105, 21, 800, accent)}
     ${titleSvg}
-    ${bodySvg}
-    <rect x="876" y="246" width="246" height="246" rx="52" fill="${accent}" opacity="0.15"/>
-    <path d="M948 397c36-58 66-86 122-116" stroke="${accent}" stroke-width="18" stroke-linecap="round" fill="none"/>
-    <path d="M929 430c46 45 108 63 171 35" stroke="#142328" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.82"/>
-    <rect x="100" y="604" width="360" height="18" rx="9" fill="${accent}" opacity="0.72"/>
-    <rect x="480" y="604" width="190" height="18" rx="9" fill="#142328" opacity="0.16"/>
-    ${text("医生审核后发布 · 患者扫码即可查看", 830, 620, 24, 700, "#556871")}
+    <rect x="80" y="206" width="740" height="356" rx="36" fill="#f7fbfa" stroke="#dbe9e4" stroke-width="2"/>
+    ${sceneArt}
+    <rect x="852" y="84" width="312" height="400" rx="34" fill="#f9fcfb" stroke="#dce9e5" stroke-width="2"/>
+    ${text("分镜动画", 890, 128, 24, 900, "#21323a")}
+    ${text(`0${index + 1} / 04`, 1056, 128, 22, 900, accent)}
+    ${stepCards}
+    <rect x="854" y="514" width="312" height="52" rx="26" fill="${accent}" opacity="${pulse.toFixed(2)}"/>
+    ${text("旁白同步中", 898, 548, 24, 900, "#ffffff")}
+    <circle cx="${1115 + Math.sin(progress * Math.PI * 5) * 10}" cy="539" r="14" fill="#eaf8a7"/>
+    <rect x="78" y="582" width="714" height="96" rx="30" fill="#13282d"/>
+    ${subtitleSvg}
+    <rect x="104" y="652" width="1010" height="12" rx="6" fill="#dbe8e3"/>
+    <rect x="104" y="652" width="${progressWidth.toFixed(1)}" height="12" rx="6" fill="${accent}"/>
+    ${text("医生审核后发布 · 患者扫码即可查看", 858, 642, 21, 800, "#45616a")}
   </svg>`;
+}
+
+function renderClinicalScene(selectedCase, index, progress) {
+  const project = selectedCase.project;
+  if (project.includes("CT")) {
+    return renderCtScene(index, progress, selectedCase.accent);
+  }
+  if (project.includes("修复") || project.includes("种植")) {
+    return renderDentalScene(index, progress, selectedCase.accent);
+  }
+  return renderEndoscopyScene(index, progress, selectedCase.accent);
+}
+
+function renderEndoscopyScene(index, progress, accent) {
+  const patientX = 228 + Math.min(progress * 160, 112);
+  const doctorX = 614 - Math.min(progress * 94, 72);
+  const scopeLength = index === 2 ? 120 + progress * 210 : 0;
+  const checklistY = 300 - progress * 34;
+  const monitorWave = Array.from({ length: 9 })
+    .map((_, item) => {
+      const x = 612 + item * 22;
+      const y = 286 + Math.sin(progress * Math.PI * 5 + item) * 13;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return `
+    <rect x="128" y="454" width="622" height="28" rx="14" fill="#d4e3de"/>
+    <rect x="228" y="394" width="324" height="74" rx="35" fill="#eaf4f0" stroke="#c8dcd5" stroke-width="3"/>
+    ${person(patientX, 362, "#f2c9aa", "#dff1eb", 1)}
+    ${person(doctorX, 342, "#f3c7a5", "#ffffff", 1.06, accent)}
+    <rect x="596" y="218" width="170" height="112" rx="22" fill="#142328"/>
+    <polyline points="${monitorWave}" fill="none" stroke="#eaf8a7" stroke-width="6" stroke-linecap="round"/>
+    <rect x="616" y="238" width="58" height="18" rx="9" fill="${accent}" opacity="0.72"/>
+    <path d="M590 386 C${590 - scopeLength * 0.2} ${382 - scopeLength * 0.05}, ${476 - scopeLength * 0.34} ${390 + scopeLength * 0.04}, ${456 - scopeLength * 0.55} ${408 + scopeLength * 0.02}" stroke="${accent}" stroke-width="${index === 2 ? 9 : 0}" fill="none" stroke-linecap="round"/>
+    <circle cx="${456 - scopeLength * 0.55}" cy="${408 + scopeLength * 0.02}" r="${index === 2 ? 12 : 0}" fill="#eaf8a7"/>
+    <rect x="148" y="${checklistY}" width="194" height="136" rx="24" fill="#ffffff" stroke="#dceae5" stroke-width="2" opacity="${index < 2 ? 1 : 0.55}"/>
+    ${check(170, checklistY + 44, "禁食禁水", accent)}
+    ${check(170, checklistY + 84, "家属陪同", accent)}
+    ${check(170, checklistY + 124, "身份核对", accent)}
+  `;
+}
+
+function renderCtScene(index, progress, accent) {
+  const tableX = 252 + (index === 2 ? progress * 172 : progress * 54);
+  const ringGlow = 0.22 + Math.sin(progress * Math.PI * 6) * 0.08;
+  const contrastY = 362 - progress * 108;
+
+  return `
+    <ellipse cx="592" cy="350" rx="142" ry="162" fill="#e8f2f6" stroke="#9eb6c5" stroke-width="18"/>
+    <ellipse cx="592" cy="350" rx="76" ry="92" fill="#f7fbfa" stroke="${accent}" stroke-width="10" opacity="${ringGlow.toFixed(2)}"/>
+    <rect x="${tableX.toFixed(1)}" y="414" width="386" height="42" rx="21" fill="#dce7e7"/>
+    <rect x="${(tableX + 80).toFixed(1)}" y="360" width="228" height="62" rx="31" fill="#eef6f3" stroke="#c6dcd4" stroke-width="3"/>
+    ${person(tableX + 122, 338, "#f2c9aa", "#dff1eb", 0.86)}
+    ${person(214, 320, "#efc09e", "#ffffff", 1.02, accent)}
+    <rect x="142" y="214" width="180" height="106" rx="22" fill="#ffffff" stroke="#dceae5" stroke-width="2"/>
+    ${check(164, 254, "过敏史确认", accent)}
+    ${check(164, 292, "肾功能确认", accent)}
+    <path d="M274 352 C344 304, 410 308, 492 346" fill="none" stroke="${accent}" stroke-width="7" stroke-dasharray="18 13" stroke-dashoffset="${(70 - progress * 110).toFixed(1)}" opacity="${index === 1 ? 1 : 0.35}"/>
+    <circle cx="286" cy="${contrastY.toFixed(1)}" r="${index === 1 ? 15 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
+    <rect x="662" y="206" width="88" height="130" rx="20" fill="#142328"/>
+    <rect x="682" y="230" width="48" height="14" rx="7" fill="#eaf8a7"/>
+    <rect x="682" y="260" width="48" height="14" rx="7" fill="${accent}"/>
+  `;
+}
+
+function renderDentalScene(index, progress, accent) {
+  const chairTilt = index === 2 ? progress * 18 : 8;
+  const toolX = 610 - progress * 136;
+  const implantY = 408 + Math.sin(progress * Math.PI * 4) * 5;
+
+  return `
+    <g transform="rotate(${-chairTilt.toFixed(2)} 394 390)">
+      <rect x="238" y="388" width="292" height="72" rx="34" fill="#e9f4f0" stroke="#c8dcd5" stroke-width="3"/>
+      <rect x="384" y="430" width="190" height="30" rx="15" fill="#d5e6df"/>
+      ${person(326, 356, "#f2c9aa", "#dff1eb", 0.92)}
+    </g>
+    ${person(608, 338, "#efc09e", "#ffffff", 1.06, accent)}
+    <rect x="150" y="226" width="184" height="128" rx="24" fill="#ffffff" stroke="#dceae5" stroke-width="2"/>
+    ${check(172, 266, "影像评估", accent)}
+    ${check(172, 306, "慢病用药", accent)}
+    <path d="M${toolX.toFixed(1)} 376 C${(toolX - 42).toFixed(1)} 384, 492 392, 446 ${implantY.toFixed(1)}" stroke="${accent}" stroke-width="${index === 2 ? 9 : 4}" fill="none" stroke-linecap="round" opacity="${index === 2 ? 1 : 0.46}"/>
+    <rect x="${(toolX - 22).toFixed(1)}" y="340" width="44" height="78" rx="13" fill="#142328" transform="rotate(-22 ${toolX.toFixed(1)} 379)"/>
+    <circle cx="446" cy="${implantY.toFixed(1)}" r="${index === 2 ? 13 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
+    <rect x="650" y="222" width="86" height="142" rx="20" fill="#142328"/>
+    <path d="M670 286 Q694 258 716 286 T758 286" fill="none" stroke="#eaf8a7" stroke-width="5"/>
+  `;
+}
+
+function renderStepCards(activeIndex, progress, accent) {
+  return Array.from({ length: 4 })
+    .map((_, index) => {
+      const y = 168 + index * 70;
+      const active = index === activeIndex;
+      const fill = active ? accent : "#ffffff";
+      const opacity = active ? 0.16 + progress * 0.2 : 0.7;
+      const label = ["资料确认", "风险提示", "过程演示", "复诊护理"][index];
+      return `
+        <rect x="886" y="${y}" width="238" height="48" rx="18" fill="${fill}" opacity="${opacity.toFixed(2)}"/>
+        <circle cx="914" cy="${y + 24}" r="12" fill="${active ? accent : "#d5e5df"}"/>
+        ${active ? `<circle cx="914" cy="${y + 24}" r="${(18 + progress * 16).toFixed(1)}" fill="${accent}" opacity="0.10"/>` : ""}
+        ${text(label, 940, y + 32, 20, active ? 900 : 700, active ? "#173137" : "#586b72")}
+      `;
+    })
+    .join("");
+}
+
+function person(x, y, skin, coat, scale = 1, accent = "#18a999") {
+  const bodyY = y + 44 * scale;
+  return `
+    <g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scale})">
+      <circle cx="0" cy="0" r="28" fill="${skin}"/>
+      <path d="M-21 24 Q0 42 22 24 L34 118 L-34 118 Z" fill="${coat}" stroke="#c8dcd5" stroke-width="3"/>
+      <path d="M-8 36 L0 80 L11 36" fill="none" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>
+      <path d="M-29 66 Q-68 88 -80 124" fill="none" stroke="${coat}" stroke-width="18" stroke-linecap="round"/>
+      <path d="M30 66 Q68 88 82 120" fill="none" stroke="${coat}" stroke-width="18" stroke-linecap="round"/>
+      <rect x="-20" y="${bodyY - y + 78}" width="16" height="70" rx="8" fill="#6c7e86"/>
+      <rect x="8" y="${bodyY - y + 78}" width="16" height="70" rx="8" fill="#6c7e86"/>
+    </g>
+  `;
+}
+
+function check(x, y, label, accent) {
+  return `
+    <circle cx="${x}" cy="${y}" r="12" fill="${accent}" opacity="0.18"/>
+    <path d="M${x - 5} ${y} L${x - 1} ${y + 5} L${x + 7} ${y - 6}" fill="none" stroke="${accent}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${text(label, x + 24, y + 7, 18, 800, "#2f454d")}
+  `;
+}
+
+function easeInOut(value) {
+  return value < 0.5
+    ? 2 * value * value
+    : 1 - Math.pow(-2 * value + 2, 2) / 2;
 }
 
 function text(value, x, y, size, weight, fill = "#152026") {
@@ -472,11 +624,6 @@ function escapeXml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function hexToFfmpegColor(value) {
-  const normalized = String(value).replace("#", "0x");
-  return /^0x[0-9a-fA-F]{6}$/.test(normalized) ? normalized : "0x18a999";
 }
 
 function run(command, args) {

@@ -168,7 +168,7 @@ const reservedModules = [
 const stepIcons = [BookOpenText, FileText, FileAudio, Video, ClipboardCheck];
 
 function App() {
-  const [selectedKey, setSelectedKey] = useState<CaseKey>("gastroscopy");
+  const [selectedKey, setSelectedKey] = useState<CaseKey>("surgery");
   const [progress, setProgress] = useState(4);
   const [approved, setApproved] = useState(true);
   const [status, setStatus] = useState<GenerationStatus>("idle");
@@ -200,8 +200,8 @@ function App() {
       detail: "生成普通话宣教音频，可直接播放",
     },
     {
-      label: "宣教视频",
-      detail: "合成字幕画面、分镜和旁白",
+      label: "分镜动画视频",
+      detail: "合成场景动作、字幕和旁白",
     },
     {
       label: "医生审核",
@@ -431,7 +431,7 @@ function App() {
             <article className="artifact storyboard-artifact">
               <div className="artifact-head">
                 <Video size={18} />
-                <span>宣教视频</span>
+                <span>分镜动画视频</span>
               </div>
               {videoUrl ? (
                 <div className="video-card">
@@ -515,7 +515,7 @@ function App() {
           <h2>把一次宣教任务做成可审核、可播放、可复用的内容闭环</h2>
           <p>
             本阶段突出一个真实可演示闭环：资料输入、模型生成宣教稿、语音文件、
-            MP4 宣教视频、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
+            MP4 分镜动画视频、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
             多科室运营与内容质控。
           </p>
         </div>
