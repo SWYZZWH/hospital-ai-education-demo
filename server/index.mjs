@@ -24,7 +24,7 @@ const apiyiBaseUrl = process.env.APIYI_BASE_URL || "https://api.apiyi.com/v1";
 const apiyiVideoModel = process.env.APIYI_VIDEO_MODEL || "veo-3.1-fast";
 const jxincmApiKey = process.env.JXINCM_API_KEY || "";
 const jxincmBaseUrl = process.env.JXINCM_BASE_URL || "https://api.jxincm.cn";
-const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "veo_3_1-fast";
+const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "sora-2-pro";
 const jxincmDuration = Number(process.env.JXINCM_VIDEO_DURATION || process.env.DEFAULT_DURATION || 15);
 const videoJobs = new Map();
 

@@ -15,7 +15,7 @@ services:
       APIYI_VIDEO_MODEL: "${APIYI_VIDEO_MODEL:-veo-3.1-fast}"
       JXINCM_API_KEY: "${JXINCM_API_KEY}"
       JXINCM_BASE_URL: "${JXINCM_BASE_URL:-https://api.jxincm.cn}"
-      JXINCM_VIDEO_MODEL: "${JXINCM_VIDEO_MODEL:-veo_3_1-fast}"
+      JXINCM_VIDEO_MODEL: "${JXINCM_VIDEO_MODEL:-sora-2-pro}"
       JXINCM_VIDEO_DURATION: "${JXINCM_VIDEO_DURATION:-15}"
       EXPOSE_LOCAL_VIDEO: "${EXPOSE_LOCAL_VIDEO:-false}"
     volumes:
