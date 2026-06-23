@@ -380,7 +380,7 @@ function App() {
   };
 
   const pollVideoJob = async (jobId: string) => {
-    for (let attempt = 0; attempt < 90; attempt += 1) {
+    for (let attempt = 0; attempt < 180; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 5000 : 10000));
       const response = await fetch(`/api/video-jobs/${jobId}`);
       const payload = (await response.json().catch(() => null)) as VideoJobResult | null;
@@ -405,7 +405,7 @@ function App() {
       }
     }
 
-    throw new Error("视频仍在生成中，请稍后刷新查看");
+    throw new Error("视频生成时间较长，请稍后刷新查看");
   };
 
   return (

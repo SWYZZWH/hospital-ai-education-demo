@@ -53,6 +53,8 @@ const jxincmBaseUrl = process.env.JXINCM_BASE_URL || "https://api.jxincm.cn";
 const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "sora-2-pro";
 const jxincmDuration = Number(process.env.JXINCM_VIDEO_DURATION || process.env.DEFAULT_DURATION || 15);
 const videoJobs = new Map();
+const videoJobLocks = new Map();
+const videoJobRunners = new Set();
 
 const cases = {
   gastroscopy: {
@@ -309,6 +311,7 @@ app.post("/api/video-jobs", async (request, response) => {
         videoPath,
         prompt,
       });
+      runVideoJobInBackground(jobId);
 
       response.json({
         jobId,
@@ -332,6 +335,7 @@ app.post("/api/video-jobs", async (request, response) => {
         videoPath,
         prompt,
       });
+      runVideoJobInBackground(jobId);
 
       response.json({
         jobId,
@@ -388,6 +392,7 @@ app.post("/api/video-jobs", async (request, response) => {
       videoPath,
       prompt,
     });
+    runVideoJobInBackground(jobId);
 
     response.json({
       jobId,
@@ -412,7 +417,7 @@ app.get("/api/video-jobs/:jobId", async (request, response) => {
   }
 
   try {
-    const updatedJob = await refreshVideoJob(job);
+    const updatedJob = await refreshVideoJobLocked(job);
     response.json(publicVideoJob(updatedJob));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -876,6 +881,73 @@ async function refreshVideoJob(job) {
     ? Math.min(0.95, progress > 1 ? progress / 100 : progress)
     : Math.min(0.92, (job.progress || 0.05) + 0.04);
   return job;
+}
+
+async function refreshVideoJobLocked(job) {
+  const existing = videoJobLocks.get(job.id);
+  if (existing) {
+    return existing;
+  }
+
+  const refreshPromise = refreshVideoJob(job).finally(() => {
+    videoJobLocks.delete(job.id);
+  });
+  videoJobLocks.set(job.id, refreshPromise);
+  return refreshPromise;
+}
+
+function runVideoJobInBackground(jobId) {
+  if (videoJobRunners.has(jobId)) {
+    return;
+  }
+  videoJobRunners.add(jobId);
+
+  void (async () => {
+    try {
+      for (let attempt = 0; attempt < 220; attempt += 1) {
+        const job = videoJobs.get(jobId);
+        if (!job || ["succeeded", "failed"].includes(job.status)) {
+          return;
+        }
+
+        await sleep(attempt < 6 ? 5000 : 10000);
+        const currentJob = videoJobs.get(jobId);
+        if (!currentJob || ["succeeded", "failed"].includes(currentJob.status)) {
+          return;
+        }
+
+        try {
+          await refreshVideoJobLocked(currentJob);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (isTransientNetworkError(message)) {
+            currentJob.refreshAttempts = (currentJob.refreshAttempts || 0) + 1;
+            currentJob.progress = Math.min(0.94, Math.max(currentJob.progress || 0.05, 0.08));
+            console.warn("video job background transient error", {
+              jobId,
+              attempt: currentJob.refreshAttempts,
+              message,
+            });
+            continue;
+          }
+
+          currentJob.status = "failed";
+          currentJob.error = "视频生成暂时失败，请稍后重试";
+          console.error("video job background failed", { jobId, message });
+          return;
+        }
+      }
+
+      const job = videoJobs.get(jobId);
+      if (job && !["succeeded", "failed"].includes(job.status)) {
+        job.status = "failed";
+        job.error = "视频生成耗时过长，请稍后重新生成";
+        console.error("video job background timeout", { jobId });
+      }
+    } finally {
+      videoJobRunners.delete(jobId);
+    }
+  })();
 }
 
 async function refreshSeedanceJob(job) {
