@@ -52,7 +52,6 @@ type EducationCase = EducationContent & {
   department: string;
   project: string;
   audience: string;
-  duration: string;
   source: string;
   tone: string;
   accent: string;
@@ -63,7 +62,7 @@ type GenerationResult = {
   model: string;
   content: EducationContent;
   audioUrl: string;
-  videoUrl: string;
+  videoUrl?: string;
 };
 
 const educationCases: EducationCase[] = [
@@ -72,7 +71,6 @@ const educationCases: EducationCase[] = [
     department: "消化内镜中心",
     project: "胃镜检查术前宣教",
     audience: "首次胃镜检查患者",
-    duration: "约 3 分钟",
     source: "检查须知、禁食禁水要求、麻醉注意事项",
     tone: "清晰、安抚、少术语",
     patientTitle: "胃镜检查前准备",
@@ -97,7 +95,6 @@ const educationCases: EducationCase[] = [
     department: "医学影像科",
     project: "增强 CT 检查宣教",
     audience: "需增强扫描患者",
-    duration: "约 2 分 40 秒",
     source: "造影剂说明、过敏史询问、检查流程",
     tone: "准确、稳重、风险可控",
     patientTitle: "增强 CT 检查说明",
@@ -122,7 +119,6 @@ const educationCases: EducationCase[] = [
     department: "口腔修复科",
     project: "无牙颌修复术前宣教",
     audience: "拟行种植修复患者",
-    duration: "约 3 分 20 秒",
     source: "修复流程、术前检查、术后护理材料",
     tone: "专业、亲和、分步骤",
     patientTitle: "种植修复术前准备",
@@ -177,8 +173,6 @@ const reviewChecks = [
   },
 ];
 
-const stepIcons = [BookOpenText, FileText, FileAudio, Video, ClipboardCheck];
-
 function App() {
   const [selectedKey, setSelectedKey] = useState<CaseKey>("surgery");
   const [progress, setProgress] = useState(4);
@@ -210,22 +204,31 @@ function App() {
     {
       label: "读取材料",
       detail: selectedCase.source,
+      icon: BookOpenText,
     },
     {
       label: "宣教文案",
       detail: "生成患者可读版本，降低医学术语密度",
+      icon: FileText,
     },
     {
       label: "语音宣教",
       detail: "生成普通话音频，患者可直接收听",
+      icon: FileAudio,
     },
-    {
-      label: "手术分镜",
-      detail: "生成可播放动画、字幕和旁白节奏",
-    },
+    ...(videoUrl
+      ? [
+          {
+            label: "手术分镜",
+            detail: "生成可播放动画、字幕和旁白节奏",
+            icon: Video,
+          },
+        ]
+      : []),
     {
       label: "医生审核",
       detail: approved ? "已通过，生成患者端入口" : "等待医生确认后发布",
+      icon: ClipboardCheck,
     },
   ];
 
@@ -414,7 +417,7 @@ function App() {
 
           <div className="flow-rail">
             {steps.map((step, index) => {
-              const Icon = stepIcons[index];
+              const Icon = step.icon;
               const active = progress >= index;
               return (
                 <div className={`flow-step ${active ? "active" : ""}`} key={step.label}>
@@ -470,36 +473,26 @@ function App() {
               </ul>
             </article>
 
-            <article className="artifact audio-artifact">
-              <div className="artifact-head">
-                <AudioLines size={18} />
-                <span>语音宣教</span>
-              </div>
-              {audioUrl ? (
-                <audio ref={audioRef} className="audio-player" controls src={audioUrl} />
-              ) : (
-                <div className="audio-display">
-                  {Array.from({ length: 34 }).map((_, index) => (
-                    <i
-                      key={`bar-${index}`}
-                      style={{ animationDelay: `${index * 0.045}s` }}
-                    />
-                  ))}
+            {audioUrl && (
+              <article className="artifact audio-artifact">
+                <div className="artifact-head">
+                  <AudioLines size={18} />
+                  <span>语音宣教</span>
                 </div>
-              )}
-              <div className="audio-meta">
-                <span>普通话 · 亲和语速</span>
-                <strong>{audioUrl ? "可播放" : selectedCase.duration}</strong>
-              </div>
-            </article>
+                <audio ref={audioRef} className="audio-player" controls src={audioUrl} />
+                <div className="audio-meta">
+                  <span>普通话 · 亲和语速</span>
+                  <strong>可播放</strong>
+                </div>
+              </article>
+            )}
 
-            {(videoUrl || isGenerating) && (
+            {videoUrl && (
               <article className="artifact storyboard-artifact">
                 <div className="artifact-head">
                   <Video size={18} />
-                  <span>{videoUrl ? "手术动画宣教片" : "正在生成手术动画"}</span>
+                  <span>手术动画宣教片</span>
                 </div>
-                {videoUrl ? (
                 <div className="video-card">
                   <video
                     ref={videoRef}
@@ -513,13 +506,6 @@ function App() {
                     保存宣教片
                   </a>
                 </div>
-                ) : (
-                  <div className="video-generating">
-                    <LoaderCircle size={22} />
-                    <strong>正在生成一条可播放的手术动画宣教片</strong>
-                    <p>完成后这里才会出现视频播放器，并同步到患者端预览。</p>
-                  </div>
-                )}
               </article>
             )}
           </div>
@@ -540,22 +526,23 @@ function App() {
                   <span key={warning}>{warning}</span>
                 ))}
               </div>
-              <button
-                className={`mini-player ${audioUrl ? "ready" : ""}`}
-                type="button"
-                onClick={playPatientAudio}
-                disabled={!audioUrl}
-                aria-label={audioUrl ? "播放语音宣教" : "语音生成后可播放"}
-              >
-                <FileAudio size={19} />
-                <div className="player-text">
-                  <strong>语音宣教</strong>
-                  <span>{audioUrl ? "已生成，可播放" : selectedCase.duration}</span>
-                </div>
-                <span className="mini-play-icon">
-                  <Play size={15} fill="currentColor" />
-                </span>
-              </button>
+              {audioUrl && (
+                <button
+                  className="mini-player ready"
+                  type="button"
+                  onClick={playPatientAudio}
+                  aria-label="播放语音宣教"
+                >
+                  <FileAudio size={19} />
+                  <div className="player-text">
+                    <strong>语音宣教</strong>
+                    <span>已生成，可播放</span>
+                  </div>
+                  <span className="mini-play-icon">
+                    <Play size={15} fill="currentColor" />
+                  </span>
+                </button>
+              )}
               {videoUrl && (
                 <div className="phone-sync">
                   <div className="phone-sync-head">
