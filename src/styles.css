@@ -38,6 +38,11 @@ button {
   font: inherit;
 }
 
+button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
 .app-shell {
   position: relative;
   isolation: isolate;
@@ -181,6 +186,30 @@ h3 {
   box-shadow: 0 0 0 6px rgba(24, 169, 153, 0.14);
 }
 
+.status-pill.generating span {
+  animation: pulse 720ms ease-in-out infinite alternate;
+}
+
+.status-pill.error {
+  color: #844036;
+  background: rgba(216, 93, 79, 0.12);
+}
+
+.status-pill.error span {
+  background: var(--coral);
+  box-shadow: 0 0 0 6px rgba(216, 93, 79, 0.14);
+}
+
+.ghost-button svg,
+.primary-button svg {
+  flex: 0 0 auto;
+}
+
+.ghost-button svg.lucide-loader-circle,
+.primary-button svg.lucide-loader-circle {
+  animation: spin 820ms linear infinite;
+}
+
 .ghost-button,
 .primary-button {
   display: inline-flex;
@@ -208,6 +237,17 @@ h3 {
   color: white;
   background: linear-gradient(135deg, #142328, #1d6f66 72%, #18a999);
   box-shadow: 0 18px 34px rgba(24, 55, 62, 0.22);
+}
+
+.error-box {
+  margin-top: 12px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  color: #844036;
+  background: rgba(216, 93, 79, 0.11);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .metric-strip {
@@ -558,6 +598,23 @@ h3 {
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(0.82);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.16);
+    opacity: 1;
+  }
+}
+
 .audio-meta {
   display: flex;
   align-items: center;
@@ -567,6 +624,41 @@ h3 {
 
 .audio-meta strong {
   font-size: 22px;
+}
+
+.audio-player {
+  display: block;
+  width: 100%;
+  height: 54px;
+  margin: 31px 0 35px;
+  accent-color: var(--mint);
+}
+
+.video-card {
+  display: grid;
+  gap: 10px;
+}
+
+.video-card video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  background: #142328;
+  box-shadow: 0 16px 38px rgba(20, 35, 40, 0.15);
+}
+
+.video-card a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border-radius: 999px;
+  color: var(--deep);
+  background: rgba(24, 169, 153, 0.12);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
 }
 
 .storyboard {

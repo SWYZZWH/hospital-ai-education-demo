@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   ClipboardCheck,
   DatabaseZap,
+  Download,
   FileAudio,
   FileText,
   Gauge,
   Hospital,
   LayoutDashboard,
   Link2,
+  LoaderCircle,
   LockKeyhole,
   MessageSquareText,
   MonitorCheck,
@@ -27,8 +29,18 @@ import {
 } from "lucide-react";
 
 type CaseKey = "gastroscopy" | "ct" | "surgery";
+type GenerationStatus = "idle" | "generating" | "ready" | "error";
 
-type DemoCase = {
+type EducationContent = {
+  patientTitle: string;
+  patientBrief: string;
+  points: string[];
+  storyboard: string[];
+  warnings: string[];
+  narration?: string;
+};
+
+type EducationCase = EducationContent & {
   key: CaseKey;
   department: string;
   project: string;
@@ -36,15 +48,18 @@ type DemoCase = {
   duration: string;
   source: string;
   tone: string;
-  patientTitle: string;
-  patientBrief: string;
-  points: string[];
-  storyboard: string[];
-  warnings: string[];
   accent: string;
 };
 
-const demoCases: DemoCase[] = [
+type GenerationResult = {
+  id: string;
+  model: string;
+  content: EducationContent;
+  audioUrl: string;
+  videoUrl: string;
+};
+
+const educationCases: EducationCase[] = [
   {
     key: "gastroscopy",
     department: "消化内镜中心",
@@ -156,11 +171,19 @@ function App() {
   const [selectedKey, setSelectedKey] = useState<CaseKey>("gastroscopy");
   const [progress, setProgress] = useState(4);
   const [approved, setApproved] = useState(true);
+  const [status, setStatus] = useState<GenerationStatus>("idle");
+  const [result, setResult] = useState<GenerationResult | null>(null);
+  const [error, setError] = useState("");
 
   const selectedCase = useMemo(
-    () => demoCases.find((item) => item.key === selectedKey) ?? demoCases[0],
+    () => educationCases.find((item) => item.key === selectedKey) ?? educationCases[0],
     [selectedKey],
   );
+
+  const content = result?.content ?? selectedCase;
+  const audioUrl = result?.audioUrl;
+  const videoUrl = result?.videoUrl;
+  const isGenerating = status === "generating";
 
   const steps = [
     {
@@ -172,27 +195,68 @@ function App() {
       detail: "生成患者可读版本，降低医学术语密度",
     },
     {
-      label: "音频宣教",
-      detail: "生成旁白节奏、停顿和重点提示",
+      label: "语音文件",
+      detail: "生成普通话宣教音频，可直接播放",
     },
     {
-      label: "视频分镜",
-      detail: "形成脚本、字幕和画面说明",
+      label: "宣教视频",
+      detail: "合成字幕画面、分镜和旁白",
     },
     {
       label: "医生审核",
-      detail: approved ? "已通过，生成患者端入口" : "待医生确认后发布",
+      detail: approved ? "已通过，生成患者端入口" : "等待医生确认后发布",
     },
   ];
 
-  const regenerate = () => {
+  const generateEducation = async () => {
+    setStatus("generating");
     setApproved(false);
+    setError("");
+    setResult(null);
     setProgress(0);
-    const timers = [1, 2, 3, 4].map((value, index) =>
-      window.setTimeout(() => setProgress(value), (index + 1) * 520),
+
+    const timers = [1, 2, 3].map((value, index) =>
+      window.setTimeout(() => setProgress(value), (index + 1) * 900),
     );
-    window.setTimeout(() => setApproved(true), 2800);
-    return () => timers.forEach(window.clearTimeout);
+
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseKey: selectedKey }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.detail || payload?.error || "生成失败");
+      }
+
+      const payload = (await response.json()) as GenerationResult;
+      setResult(payload);
+      setProgress(4);
+      setApproved(true);
+      setStatus("ready");
+    } catch (generationError) {
+      setStatus("error");
+      setProgress(0);
+      setApproved(false);
+      setError(
+        generationError instanceof Error
+          ? generationError.message
+          : "生成服务连接失败",
+      );
+    } finally {
+      timers.forEach(window.clearTimeout);
+    }
+  };
+
+  const chooseCase = (key: CaseKey) => {
+    setSelectedKey(key);
+    setProgress(4);
+    setApproved(true);
+    setStatus("idle");
+    setResult(null);
+    setError("");
   };
 
   return (
@@ -204,25 +268,36 @@ function App() {
             <Hospital size={23} strokeWidth={1.8} />
           </div>
           <div>
-            <p className="eyebrow">科研展示 Demo · 核心流程验证</p>
-            <h1>医院 AI 宣教内容生成中心</h1>
+            <p className="eyebrow">真实内容生成 · 医生审核发布</p>
+            <h1>医院 AI 宣教内容生成工作台</h1>
           </div>
         </div>
         <div className="top-actions">
-          <div className="status-pill">
+          <div className={`status-pill ${status}`}>
             <span />
-            试点流程在线
+            {status === "ready"
+              ? "语音与视频已生成"
+              : status === "generating"
+                ? "正在生成真实内容"
+                : status === "error"
+                  ? "生成服务需检查"
+                  : "生成服务在线"}
           </div>
-          <button className="ghost-button" type="button" onClick={regenerate}>
-            <Sparkles size={17} />
-            重新生成
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={generateEducation}
+            disabled={isGenerating}
+          >
+            {isGenerating ? <LoaderCircle size={17} /> : <Sparkles size={17} />}
+            {isGenerating ? "生成中" : "重新生成"}
           </button>
         </div>
       </header>
 
       <section className="metric-strip" aria-label="demo metrics">
-        <Metric label="首期覆盖" value="1 个核心闭环" sub="检查 / 术前宣教" />
-        <Metric label="生成时长" value="3 分钟内" sub="文案、音频、分镜" />
+        <Metric label="首期覆盖" value="1 个核心闭环" sub="文案 / 语音 / 视频" />
+        <Metric label="生成方式" value="真实产物" sub="可播放音频与 MP4" />
         <Metric label="审核方式" value="医生确认" sub="发布前留痕" />
         <Metric label="患者入口" value="二维码 / 网页" sub="轻量展示" />
       </section>
@@ -234,7 +309,7 @@ function App() {
             <span>医生工作台</span>
           </div>
           <div className="case-list">
-            {demoCases.map((item) => (
+            {educationCases.map((item) => (
               <button
                 className={`case-card ${
                   item.key === selectedKey ? "selected" : ""
@@ -242,11 +317,7 @@ function App() {
                 key={item.key}
                 style={{ "--case-color": item.accent } as CSSProperties}
                 type="button"
-                onClick={() => {
-                  setSelectedKey(item.key);
-                  setProgress(4);
-                  setApproved(true);
-                }}
+                onClick={() => chooseCase(item.key)}
               >
                 <span>{item.department}</span>
                 <strong>{item.project}</strong>
@@ -267,10 +338,16 @@ function App() {
             </div>
           </div>
 
-          <button className="primary-button" type="button" onClick={regenerate}>
-            <Play size={17} fill="currentColor" />
-            生成宣教内容
+          <button
+            className="primary-button"
+            type="button"
+            onClick={generateEducation}
+            disabled={isGenerating}
+          >
+            {isGenerating ? <LoaderCircle size={17} /> : <Play size={17} fill="currentColor" />}
+            {isGenerating ? "正在生成语音和视频" : "生成宣教内容"}
           </button>
+          {error && <div className="error-box">{error}</div>}
         </aside>
 
         <section className="generation-panel">
@@ -281,7 +358,7 @@ function App() {
             </div>
             <div className="trace-badge">
               <ShieldCheck size={17} />
-              可审核 · 可追溯
+              {result ? `已生成 · ${result.model}` : "可审核 · 可追溯"}
             </div>
           </div>
 
@@ -309,10 +386,10 @@ function App() {
                 <FileText size={18} />
                 <span>患者版宣教文案</span>
               </div>
-              <h3>{selectedCase.patientTitle}</h3>
-              <p>{selectedCase.patientBrief}</p>
+              <h3>{content.patientTitle}</h3>
+              <p>{content.patientBrief}</p>
               <ul>
-                {selectedCase.points.map((point) => (
+                {content.points.map((point) => (
                   <li key={point}>{point}</li>
                 ))}
               </ul>
@@ -321,35 +398,49 @@ function App() {
             <article className="artifact audio-artifact">
               <div className="artifact-head">
                 <AudioLines size={18} />
-                <span>音频宣教</span>
+                <span>语音宣教</span>
               </div>
-              <div className="audio-display">
-                {Array.from({ length: 34 }).map((_, index) => (
-                  <i
-                    key={`bar-${index}`}
-                    style={{ animationDelay: `${index * 0.045}s` }}
-                  />
-                ))}
-              </div>
+              {audioUrl ? (
+                <audio className="audio-player" controls src={audioUrl} />
+              ) : (
+                <div className="audio-display">
+                  {Array.from({ length: 34 }).map((_, index) => (
+                    <i
+                      key={`bar-${index}`}
+                      style={{ animationDelay: `${index * 0.045}s` }}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="audio-meta">
                 <span>普通话 · 亲和语速</span>
-                <strong>{selectedCase.duration}</strong>
+                <strong>{audioUrl ? "可播放" : selectedCase.duration}</strong>
               </div>
             </article>
 
             <article className="artifact storyboard-artifact">
               <div className="artifact-head">
                 <Video size={18} />
-                <span>视频脚本与分镜</span>
+                <span>宣教视频</span>
               </div>
-              <div className="storyboard">
-                {selectedCase.storyboard.map((shot, index) => (
-                  <div className="shot" key={shot}>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <p>{shot}</p>
-                  </div>
-                ))}
-              </div>
+              {videoUrl ? (
+                <div className="video-card">
+                  <video controls src={videoUrl} />
+                  <a href={videoUrl} download>
+                    <Download size={15} />
+                    下载 MP4
+                  </a>
+                </div>
+              ) : (
+                <div className="storyboard">
+                  {content.storyboard.map((shot, index) => (
+                    <div className="shot" key={shot}>
+                      <span>{String(index + 1).padStart(2, "0")}</span>
+                      <p>{shot}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </article>
           </div>
         </section>
@@ -362,10 +453,10 @@ function App() {
             </div>
             <div className="phone-body">
               <div className="hospital-chip">院内宣教中心</div>
-              <h3>{selectedCase.patientTitle}</h3>
-              <p>{selectedCase.patientBrief}</p>
+              <h3>{content.patientTitle}</h3>
+              <p>{content.patientBrief}</p>
               <div className="warning-row">
-                {selectedCase.warnings.map((warning) => (
+                {content.warnings.map((warning) => (
                   <span key={warning}>{warning}</span>
                 ))}
               </div>
@@ -373,14 +464,14 @@ function App() {
                 <FileAudio size={19} />
                 <div>
                   <strong>语音宣教</strong>
-                  <span>{selectedCase.duration}</span>
+                  <span>{audioUrl ? "已生成，可播放" : selectedCase.duration}</span>
                 </div>
                 <button aria-label="播放语音宣教" type="button">
                   <Play size={15} fill="currentColor" />
                 </button>
               </div>
               <div className="patient-steps">
-                {selectedCase.points.map((point) => (
+                {content.points.map((point) => (
                   <div key={point}>
                     <CheckCircle2 size={16} />
                     <span>{point}</span>
@@ -405,10 +496,11 @@ function App() {
             <LayoutDashboard size={19} />
             <span>院内展示视图</span>
           </div>
-          <h2>把科研 Demo 讲成可扩展的宣教平台</h2>
+          <h2>把一次宣教任务做成可审核、可播放、可复用的内容闭环</h2>
           <p>
-            本阶段突出一个可演示闭环：资料输入、内容生成、音频与分镜、医生审核、患者端展示。
-            后续完整项目再扩展到院内接口、本地部署、多科室运营与内容质控。
+            本阶段突出一个真实可演示闭环：资料输入、模型生成宣教稿、语音文件、
+            MP4 宣教视频、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
+            多科室运营与内容质控。
           </p>
         </div>
         <div className="display-stats">
@@ -422,7 +514,7 @@ function App() {
       <section className="reserved-section">
         <div className="reserved-title">
           <p className="section-label">完整项目接口位</p>
-          <h2>本阶段预留，不在科研 Demo 中强行承诺生产联调</h2>
+          <h2>本阶段预留，不在当前演示中强行承诺生产联调</h2>
         </div>
         <div className="reserved-grid">
           {reservedModules.map((module) => {

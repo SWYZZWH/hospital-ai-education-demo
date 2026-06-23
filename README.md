@@ -1,15 +1,15 @@
-# Hospital AI Education Demo
+# Hospital AI Education Workspace
 
-医院 AI 宣教内容生成与患者端展示科研 Demo。
+医院 AI 宣教内容生成、语音宣教与视频合成工作台。
 
 ## Run
 
 ```bash
-docker run --rm -it -p 5173:5173 -v "$PWD":/app -w /app node:24-alpine sh -lc "npm install && npm run dev"
+docker compose up --build
 ```
 
 ## Build
 
 ```bash
-docker run --rm -v "$PWD":/app -w /app node:24-alpine sh -lc "npm ci && npm run build"
+docker run --rm -v "$PWD":/app -w /app node:24-bookworm-slim sh -lc "npm ci && npm run build"
 ```
