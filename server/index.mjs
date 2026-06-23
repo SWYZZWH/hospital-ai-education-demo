@@ -415,6 +415,17 @@ app.get("/api/video-jobs/:jobId", async (request, response) => {
     response.json(publicVideoJob(updatedJob));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (job.status === "processing" && isTransientNetworkError(message)) {
+      job.refreshAttempts = (job.refreshAttempts || 0) + 1;
+      job.progress = Math.min(0.94, Math.max(job.progress || 0.05, 0.08));
+      console.warn("video job refresh transient error", {
+        jobId: job.id,
+        attempt: job.refreshAttempts,
+        message,
+      });
+      response.json(publicVideoJob(job));
+      return;
+    }
     job.status = "failed";
     job.error = "视频生成暂时失败，请稍后重试";
     console.error("video job refresh failed", { jobId: job.id, message });
@@ -1118,6 +1129,10 @@ function formatProviderError(data, status) {
   }
 
   return `视频服务 HTTP ${status}`;
+}
+
+function isTransientNetworkError(message) {
+  return /fetch failed|aborted|ETIMEDOUT|ECONNRESET|EAI_AGAIN|network/i.test(message);
 }
 
 function extractVideoUrl(content) {
