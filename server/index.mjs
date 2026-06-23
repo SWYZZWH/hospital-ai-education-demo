@@ -34,6 +34,12 @@ const googleVideoResolution = process.env.GEMINI_VIDEO_RESOLUTION || "720p";
 const apiyiApiKey = process.env.APIYI_KEY || "";
 const apiyiBaseUrl = process.env.APIYI_BASE_URL || "https://api.apiyi.com/v1";
 const apiyiVideoModel = process.env.APIYI_VIDEO_MODEL || "veo-3.1-fast";
+const seedanceApiKey = process.env.ARK_API_KEY || process.env.SEEDANCE_API_KEY || "";
+const seedanceBaseUrl =
+  process.env.SEEDANCE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+const seedanceVideoModel =
+  process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-260128";
+const seedanceVideoDuration = Number(process.env.SEEDANCE_VIDEO_DURATION || 15);
 const jxincmApiKey = process.env.JXINCM_API_KEY || "";
 const jxincmBaseUrl = process.env.JXINCM_BASE_URL || "https://api.jxincm.cn";
 const jxincmModel = process.env.JXINCM_VIDEO_MODEL || process.env.DEFAULT_MODEL || "sora-2-pro";
@@ -203,7 +209,9 @@ app.get("/api/health", (_request, response) => {
     ok: true,
     model: llmModel,
     tts: "edge-tts zh-CN-XiaoxiaoNeural",
-    video: googleVideoApiKey
+    video: seedanceApiKey
+      ? `seedance ${seedanceVideoModel}`
+      : googleVideoApiKey
       ? `gemini ${googleVideoModel}`
       : apiyiApiKey
       ? `apiyi ${apiyiVideoModel}`
@@ -241,7 +249,7 @@ app.post("/api/generate", async (request, response) => {
       content,
       audioUrl: `/generated/${id}.mp3`,
       videoGenerationAvailable: Boolean(
-        googleVideoApiKey || apiyiApiKey || jxincmApiKey || exposeLocalVideo,
+        seedanceApiKey || googleVideoApiKey || apiyiApiKey || jxincmApiKey || exposeLocalVideo,
       ),
       ...(videoUrl ? { videoUrl } : {}),
     });
@@ -255,7 +263,7 @@ app.post("/api/generate", async (request, response) => {
 });
 
 app.post("/api/video-jobs", async (request, response) => {
-  if (!googleVideoApiKey && !apiyiApiKey && !jxincmApiKey && !exposeLocalVideo) {
+  if (!seedanceApiKey && !googleVideoApiKey && !apiyiApiKey && !jxincmApiKey && !exposeLocalVideo) {
     response.status(503).json({
       error: "视频生成服务尚未配置",
     });
@@ -274,6 +282,29 @@ app.post("/api/video-jobs", async (request, response) => {
     await mkdir(generatedDir, { recursive: true });
 
     const prompt = buildVideoPrompt(content, selectedCase);
+
+    if (seedanceApiKey) {
+      const remoteTask = await createSeedanceVideo(prompt);
+      videoJobs.set(jobId, {
+        id: jobId,
+        provider: "seedance",
+        remoteId: remoteTask.id,
+        status: "processing",
+        progress: 0.05,
+        videoUrl: null,
+        error: "",
+        createdAt: Date.now(),
+        videoPath,
+        prompt,
+      });
+
+      response.json({
+        jobId,
+        status: "processing",
+        progress: 0.05,
+      });
+      return;
+    }
 
     if (googleVideoApiKey) {
       const remoteTask = await createGoogleVeoVideo(prompt);
@@ -575,6 +606,44 @@ function buildVideoPrompt(content, selectedCase) {
   ].join(" ");
 }
 
+function buildSeedanceVideoPrompt(prompt) {
+  return [
+    `${prompt}`,
+    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可。",
+    "请生成中文女声旁白，语气平稳亲和，尽量让画面分镜、字幕和旁白同步。",
+    "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要出现错误医学术语。",
+    "镜头按分镜推进，画面真实、干净、专业，适合给客户演示和患者端预览。",
+  ].join(" ");
+}
+
+async function createSeedanceVideo(prompt) {
+  const duration =
+    Number.isFinite(seedanceVideoDuration) && seedanceVideoDuration >= 5
+      ? Math.min(15, seedanceVideoDuration)
+      : 15;
+  const payload = {
+    model: seedanceVideoModel,
+    content: [
+      {
+        type: "text",
+        text: buildSeedanceVideoPrompt(prompt),
+      },
+    ],
+    generate_audio: true,
+    ratio: "16:9",
+    duration,
+    watermark: false,
+  };
+  const data = await requestSeedance("/contents/generations/tasks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!data?.id) {
+    throw new Error("Seedance 未返回任务 ID");
+  }
+  return data;
+}
+
 async function createJxincmVideo(prompt) {
   const payload = {
     images: [],
@@ -615,6 +684,10 @@ async function refreshVideoJob(job) {
     return job;
   }
 
+  if (job.provider === "seedance") {
+    return refreshSeedanceJob(job);
+  }
+
   if (job.provider === "google-veo") {
     return refreshGoogleVeoJob(job);
   }
@@ -644,6 +717,45 @@ async function refreshVideoJob(job) {
   job.progress = Number.isFinite(progress) && progress > 0
     ? Math.min(0.95, progress > 1 ? progress / 100 : progress)
     : Math.min(0.92, (job.progress || 0.05) + 0.04);
+  return job;
+}
+
+async function refreshSeedanceJob(job) {
+  const data = await requestSeedance(
+    `/contents/generations/tasks?filter.task_ids=${encodeURIComponent(job.remoteId)}&page_num=1&page_size=1`,
+    { method: "GET" },
+  );
+  const task = Array.isArray(data?.items) ? data.items[0] : data;
+  if (!task) {
+    job.status = "processing";
+    job.progress = Math.min(0.92, (job.progress || 0.05) + 0.04);
+    return job;
+  }
+
+  const rawStatus = String(task.status || "processing").toLowerCase();
+  const videoUrl =
+    task?.content?.video_url ||
+    task?.content?.videoUrl ||
+    task?.content?.url ||
+    task?.video_url ||
+    "";
+
+  if ((rawStatus === "succeeded" || rawStatus === "completed") && videoUrl) {
+    await downloadVideo(videoUrl, job.videoPath);
+    job.status = "succeeded";
+    job.progress = 1;
+    job.videoUrl = `/generated/${job.id}.mp4`;
+    return job;
+  }
+
+  if (rawStatus === "failed" || rawStatus === "error" || rawStatus === "canceled") {
+    job.status = "failed";
+    job.error = formatProviderError(task?.error || task, 500);
+    return job;
+  }
+
+  job.status = "processing";
+  job.progress = Math.min(0.92, (job.progress || 0.05) + 0.04);
   return job;
 }
 
@@ -750,6 +862,38 @@ async function requestJxincm(endpoint, options) {
       ...options,
       headers: {
         Authorization: `Bearer ${jxincmApiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
+      signal: controller.signal,
+    });
+
+    const textBody = await response.text();
+    let data;
+    try {
+      data = textBody ? JSON.parse(textBody) : {};
+    } catch {
+      data = { message: textBody };
+    }
+
+    if (!response.ok) {
+      throw new Error(formatProviderError(data, response.status));
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestSeedance(endpoint, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
+  try {
+    const response = await fetch(`${seedanceBaseUrl.replace(/\/$/, "")}${endpoint}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${seedanceApiKey}`,
         "Content-Type": "application/json",
         Accept: "application/json",
         ...(options.headers || {}),
