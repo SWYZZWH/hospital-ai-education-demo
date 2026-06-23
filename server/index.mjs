@@ -38,7 +38,7 @@ const seedanceApiKey = process.env.ARK_API_KEY || process.env.SEEDANCE_API_KEY |
 const seedanceBaseUrl =
   process.env.SEEDANCE_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
 const seedanceVideoModel =
-  process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-260128";
+  process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-mini-260615";
 const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
 const seedanceSegmentDuration = Number(
   process.env.SEEDANCE_SEGMENT_DURATION ||
@@ -295,6 +295,9 @@ app.post("/api/video-jobs", async (request, response) => {
         provider: "seedance",
         remoteId: remoteTask.ids[0],
         remoteIds: remoteTask.ids,
+        seedanceSegments: remoteTask.segments,
+        seedanceVideoUrls: [],
+        currentSegmentIndex: 0,
         status: "processing",
         progress: 0.05,
         videoUrl: null,
@@ -440,7 +443,8 @@ async function generateContent(selectedCase, doctorNotes) {
     "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文宣教内容。",
     "要求：只输出 JSON，不输出 Markdown；不要诊断、不要替代医生医嘱；避免技术实现、模型名称和内部术语；语气专业、清楚、安抚。",
     "同时生成患者查看素材，每一段都要像患者真正会看到的步骤说明，避免项目介绍、模型名称和技术实现描述。",
-    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，220-320 字。",
+    "语音宣教必须由你重新撰写，不要套用输入材料原句，不要像模板拼接；narration 要像真实护士/医生对患者说话，口语自然但医学谨慎。",
+    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，260-380 字。",
     `科室：${selectedCase.department}`,
     `项目：${selectedCase.project}`,
     `患者对象：${selectedCase.audience}`,
@@ -462,7 +466,7 @@ async function generateContent(selectedCase, doctorNotes) {
           {
             role: "system",
             content:
-              "你只生成医院宣教内容 JSON，必须患者友好、事实谨慎、可由医生审核。",
+    "你只生成医院宣教内容 JSON，必须患者友好、事实谨慎、可由医生审核。narration 必须是模型原创的完整中文语音宣教稿，不要输出模板句。",
           },
           { role: "user", content: prompt },
         ],
@@ -613,15 +617,18 @@ function buildVideoPrompt(content, selectedCase) {
 }
 
 function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
+  const prefix = index === 0
+    ? "这是完整宣教片的开头段。"
+    : "请基于视频1继续向后延长，不要重头开始，不要改换主视觉风格；从上一段尾帧自然衔接。";
   return [
-    `生成一段中文医院患者宣教视频，这是完整宣教片的第 ${index + 1}/${total} 段。`,
+    `生成一段中文医院患者宣教视频，${prefix}当前是第 ${index + 1}/${total} 段。`,
     `科室：${selectedCase.department}。主题：${selectedCase.project}。患者对象：${selectedCase.audience}。`,
     `本段重点：${shot.focus}。`,
     `画面安排：${shot.camera}；${shot.motion}。`,
     `本段旁白：${shot.voiceover || shot.subtitle}`,
     `本段字幕：${shot.subtitle}`,
     `整体宣教摘要：${content.patientBrief}`,
-    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可，段落之间风格一致。",
+    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可，段落之间必须风格一致。",
     "请生成中文女声旁白，语气平稳亲和，尽量让画面分镜、字幕和旁白同步。",
     "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要出现错误医学术语。",
     "画面真实、干净、专业，适合给客户演示和患者端预览；不要血腥、不要暴露组织、不要恐怖医疗画面。",
@@ -629,6 +636,12 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
 }
 
 async function createSeedanceVideo(content, selectedCase, prompt) {
+  const segments = buildSeedanceSegments(content, selectedCase, prompt);
+  const firstTask = await createSeedanceTask(segments[0]);
+  return { ids: [firstTask.id], segments };
+}
+
+function buildSeedanceSegments(content, selectedCase, prompt) {
   const shots = normalizeDirectorShots(content.directorShots, {
     directorShots: buildDirectorShots(selectedCase),
   });
@@ -644,55 +657,60 @@ async function createSeedanceVideo(content, selectedCase, prompt) {
     2,
     Math.min(shots.length, Math.ceil(totalDuration / segmentDuration)),
   );
-  const ids = [];
+  const segments = [];
 
   for (let index = 0; index < segmentCount; index += 1) {
     const shot = shots[index] || shots[shots.length - 1];
     const isFinalSegment = index === segmentCount - 1;
     const remainingDuration = totalDuration - segmentDuration * index;
     const duration = Math.max(5, Math.min(segmentDuration, remainingDuration));
-    const payload = {
+    segments.push({
+      prompt: buildSeedanceSegmentPrompt(content, selectedCase, shot, index, segmentCount),
+      duration: isFinalSegment ? Math.round(duration) : segmentDuration,
+    });
+  }
+
+  if (segments.length === 0) {
+    segments.push({ prompt, duration: segmentDuration });
+  }
+
+  return segments;
+}
+
+async function createSeedanceTask(segment, previousVideoUrl = "") {
+  const content = [
+    {
+      type: "text",
+      text: segment.prompt,
+    },
+  ];
+
+  if (previousVideoUrl) {
+    content.push({
+      type: "video_url",
+      video_url: {
+        url: previousVideoUrl,
+      },
+      role: "reference_video",
+    });
+  }
+
+  const data = await requestSeedance("/contents/generations/tasks", {
+    method: "POST",
+    body: JSON.stringify({
       model: seedanceVideoModel,
-      content: [
-        {
-          type: "text",
-          text: buildSeedanceSegmentPrompt(content, selectedCase, shot, index, segmentCount),
-        },
-      ],
+      content,
       generate_audio: true,
       ratio: "16:9",
-      duration: isFinalSegment ? Math.round(duration) : segmentDuration,
+      duration: segment.duration,
       watermark: false,
-    };
-    const data = await requestSeedance("/contents/generations/tasks", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    if (!data?.id) {
-      throw new Error("Seedance 未返回任务 ID");
-    }
-    ids.push(data.id);
-  }
+    }),
+  });
 
-  if (ids.length === 0) {
-    const data = await requestSeedance("/contents/generations/tasks", {
-      method: "POST",
-      body: JSON.stringify({
-        model: seedanceVideoModel,
-        content: [{ type: "text", text: prompt }],
-        generate_audio: true,
-        ratio: "16:9",
-        duration: segmentDuration,
-        watermark: false,
-      }),
-    });
-    if (!data?.id) {
-      throw new Error("Seedance 未返回任务 ID");
-    }
-    ids.push(data.id);
+  if (!data?.id) {
+    throw new Error("Seedance 未返回任务 ID");
   }
-
-  return { ids };
+  return data;
 }
 
 async function createJxincmVideo(prompt) {
@@ -772,52 +790,57 @@ async function refreshVideoJob(job) {
 }
 
 async function refreshSeedanceJob(job) {
-  const remoteIds = Array.isArray(job.remoteIds) && job.remoteIds.length
-    ? job.remoteIds
-    : [job.remoteId].filter(Boolean);
-  const tasks = await Promise.all(remoteIds.map((taskId) => querySeedanceTask(taskId)));
+  const remoteId = job.remoteId;
+  const task = remoteId ? await querySeedanceTask(remoteId) : null;
+  const segments = Array.isArray(job.seedanceSegments) && job.seedanceSegments.length
+    ? job.seedanceSegments
+    : [];
+  const currentIndex = Number.isInteger(job.currentSegmentIndex)
+    ? job.currentSegmentIndex
+    : 0;
 
-  if (tasks.every((task) => !task)) {
+  if (!task) {
     job.status = "processing";
     job.progress = Math.min(0.92, (job.progress || 0.05) + 0.04);
     return job;
   }
 
-  const failedTask = tasks.find((task) => {
-    const rawStatus = String(task?.status || "processing").toLowerCase();
-    return rawStatus === "failed" || rawStatus === "error" || rawStatus === "canceled";
-  });
+  const rawStatus = String(task?.status || "processing").toLowerCase();
 
-  if (failedTask) {
+  if (rawStatus === "failed" || rawStatus === "error" || rawStatus === "canceled") {
     job.status = "failed";
-    job.error = formatProviderError(failedTask?.error || failedTask, 500);
+    job.error = formatProviderError(task?.error || task, 500);
     return job;
   }
 
-  const completedTasks = tasks.filter((task) => {
-    const rawStatus = String(task?.status || "processing").toLowerCase();
-    return (rawStatus === "succeeded" || rawStatus === "completed") && extractSeedanceVideoUrl(task);
-  });
+  const completed = rawStatus === "succeeded" || rawStatus === "completed";
+  const videoUrl = extractSeedanceVideoUrl(task);
+  if (completed && videoUrl) {
+    job.seedanceVideoUrls[currentIndex] = videoUrl;
 
-  if (completedTasks.length === remoteIds.length) {
+    if (currentIndex < segments.length - 1) {
+      const nextTask = await createSeedanceTask(segments[currentIndex + 1], videoUrl);
+      job.remoteId = nextTask.id;
+      job.remoteIds = [...(job.remoteIds || []), nextTask.id];
+      job.currentSegmentIndex = currentIndex + 1;
+      job.status = "processing";
+      job.progress = Math.min(
+        0.92,
+        0.08 + ((currentIndex + 1) / segments.length) * 0.82,
+      );
+      return job;
+    }
+
     try {
-      const segmentPaths = [];
-      for (const [index, task] of completedTasks.entries()) {
-        const segmentPath = path.join(generatedDir, `${job.id}-seedance-${index}.mp4`);
-        await downloadVideo(extractSeedanceVideoUrl(task), segmentPath);
-        segmentPaths.push(segmentPath);
-      }
-
-      if (segmentPaths.length === 1) {
-        await rm(job.videoPath, { force: true });
-        await downloadVideo(extractSeedanceVideoUrl(completedTasks[0]), job.videoPath);
-      } else {
-        await stitchVideoSegments(segmentPaths, job.videoPath, job.id);
-      }
+      await downloadVideo(videoUrl, job.videoPath);
+      job.status = "succeeded";
+      job.progress = 1;
+      job.videoUrl = `/generated/${job.id}.mp4`;
+      return job;
     } catch (error) {
       job.downloadAttempts = (job.downloadAttempts || 0) + 1;
       if (job.downloadAttempts < 5) {
-        console.warn("seedance video download/stitch retry", {
+        console.warn("seedance video download retry", {
           jobId: job.id,
           attempt: job.downloadAttempts,
           message: error instanceof Error ? error.message : String(error),
@@ -828,17 +851,12 @@ async function refreshSeedanceJob(job) {
       }
       throw error;
     }
-
-    job.status = "succeeded";
-    job.progress = 1;
-    job.videoUrl = `/generated/${job.id}.mp4`;
-    return job;
   }
 
   job.status = "processing";
   job.progress = Math.min(
     0.92,
-    Math.max(job.progress || 0.05, 0.08 + (completedTasks.length / remoteIds.length) * 0.82),
+    Math.max(job.progress || 0.05, 0.08 + (currentIndex / Math.max(segments.length, 1)) * 0.82),
   );
   return job;
 }
@@ -1176,39 +1194,6 @@ async function downloadVideoWithHeaders(videoUrl, outputPath, headers = {}) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function stitchVideoSegments(segmentPaths, outputPath, id) {
-  const concatPath = path.join(generatedDir, `${id}-seedance-segments.txt`);
-  const concatBody = segmentPaths
-    .map((segmentPath) => `file '${segmentPath.replace(/'/g, "'\\''")}'`)
-    .join("\n");
-  await writeFile(concatPath, `${concatBody}\n`);
-
-  await run("ffmpeg", [
-    "-y",
-    "-f",
-    "concat",
-    "-safe",
-    "0",
-    "-i",
-    concatPath,
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "22",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "160k",
-    "-pix_fmt",
-    "yuv420p",
-    outputPath,
-  ]);
-
-  await rm(concatPath, { force: true });
 }
 
 function findGoogleVideo(payload) {
