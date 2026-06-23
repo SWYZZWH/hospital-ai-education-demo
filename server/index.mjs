@@ -570,13 +570,13 @@ function renderStoryboardFrame(scene, selectedCase, index, progress) {
     ${text(scene.label, 104, 105, 21, 800, accent)}
     ${titleSvg}
     <rect x="642" y="80" width="182" height="38" rx="19" fill="${accent}" opacity="0.12"/>
-    ${text("镜头语言", 670, 106, 18, 800, "#2d5058")}
+    ${text("本步重点", 670, 106, 18, 800, "#2d5058")}
     <rect x="642" y="128" width="182" height="38" rx="19" fill="#142328" opacity="0.08"/>
     ${text(scene.focus || "局部放大", 670, 154, 18, 800, "#2d5058")}
     <rect x="80" y="206" width="740" height="356" rx="36" fill="#f7fbfa" stroke="#dbe9e4" stroke-width="2"/>
     ${sceneArt}
     <rect x="852" y="84" width="312" height="400" rx="34" fill="#f9fcfb" stroke="#dce9e5" stroke-width="2"/>
-    ${text("分镜动画", 890, 128, 24, 900, "#21323a")}
+    ${text("宣教步骤", 890, 128, 24, 900, "#21323a")}
     ${text(`0${index + 1} / 04`, 1056, 128, 22, 900, accent)}
     ${stepCards}
     <rect x="854" y="514" width="312" height="52" rx="26" fill="${accent}" opacity="${pulse.toFixed(2)}"/>
@@ -658,6 +658,10 @@ function renderDentalScene(index, progress, accent) {
   const chairTilt = index === 2 ? progress * 18 : 8;
   const toolX = 610 - progress * 136;
   const implantY = 408 + Math.sin(progress * Math.PI * 4) * 5;
+  const scanX = 184 + progress * 94;
+  const pathProgress = Math.min(1, progress * 1.2);
+  const phoneLift = index === 3 ? 16 + progress * 32 : 0;
+  const cycleLabels = ["检查评估", "方案确认", "手术配合", "复诊护理"];
 
   return `
     <g transform="rotate(${-chairTilt.toFixed(2)} 394 390)">
@@ -666,14 +670,22 @@ function renderDentalScene(index, progress, accent) {
       ${person(326, 356, "#f2c9aa", "#dff1eb", 0.92)}
     </g>
     ${person(608, 338, "#efc09e", "#ffffff", 1.06, accent)}
-    <rect x="150" y="226" width="184" height="128" rx="24" fill="#ffffff" stroke="#dceae5" stroke-width="2"/>
-    ${check(172, 266, "影像评估", accent)}
-    ${check(172, 306, "慢病用药", accent)}
+    <rect x="138" y="220" width="210" height="142" rx="24" fill="#ffffff" stroke="#dceae5" stroke-width="2"/>
+    ${check(162, 260, index === 0 ? "CBCT影像" : "影像评估", accent)}
+    ${check(162, 302, index === 1 ? "周期确认" : "慢病用药", accent)}
+    <rect x="370" y="216" width="170" height="120" rx="28" fill="#ffffff" stroke="#dceae5" stroke-width="2" opacity="${index <= 1 ? 1 : 0.7}"/>
+    <path d="M404 286 Q440 248 478 286 T530 286" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="${scanX.toFixed(1)}" cy="260" r="${index === 0 ? 15 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
+    <path d="M404 318 C452 278, 500 274, 536 236" fill="none" stroke="${accent}" stroke-width="6" stroke-dasharray="${(pathProgress * 120).toFixed(1)} 140" opacity="${index === 1 ? 1 : 0.24}"/>
     <path d="M${toolX.toFixed(1)} 376 C${(toolX - 42).toFixed(1)} 384, 492 392, 446 ${implantY.toFixed(1)}" stroke="${accent}" stroke-width="${index === 2 ? 9 : 4}" fill="none" stroke-linecap="round" opacity="${index === 2 ? 1 : 0.46}"/>
     <rect x="${(toolX - 22).toFixed(1)}" y="340" width="44" height="78" rx="13" fill="#142328" transform="rotate(-22 ${toolX.toFixed(1)} 379)"/>
     <circle cx="446" cy="${implantY.toFixed(1)}" r="${index === 2 ? 13 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
-    <rect x="650" y="222" width="86" height="142" rx="20" fill="#142328"/>
+    <rect x="650" y="${(222 - phoneLift).toFixed(1)}" width="86" height="142" rx="20" fill="#142328"/>
     <path d="M670 286 Q694 258 716 286 T758 286" fill="none" stroke="#eaf8a7" stroke-width="5"/>
+    <rect x="674" y="${(322 - phoneLift).toFixed(1)}" width="38" height="8" rx="4" fill="${index === 3 ? "#eaf8a7" : accent}" opacity="${index === 3 ? 1 : 0.55}"/>
+    <rect x="188" y="494" width="468" height="18" rx="9" fill="#dceae5"/>
+    <rect x="188" y="494" width="${(118 + index * 116 + progress * 78).toFixed(1)}" height="18" rx="9" fill="${accent}" opacity="0.7"/>
+    ${text(cycleLabels[index] || "术前宣教", 676, 506, 20, 900, "#2f454d")}
   `;
 }
 

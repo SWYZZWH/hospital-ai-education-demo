@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   BookOpenText,
@@ -188,7 +188,6 @@ function App() {
   const [error, setError] = useState("");
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [activeDirectorIndex, setActiveDirectorIndex] = useState(0);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -206,32 +205,6 @@ function App() {
     [content, selectedCase],
   );
   const activeDirectorShot = directorShots[activeDirectorIndex] ?? directorShots[0];
-  const previewProgress =
-    status === "generating"
-      ? Math.min(0.92, (progress + 0.35) / 5)
-      : status === "ready"
-        ? playbackProgress
-        : playbackProgress;
-
-  useEffect(() => {
-    if (!isPreviewPlaying || videoUrl) {
-      return undefined;
-    }
-
-    const timer = window.setInterval(() => {
-      setPlaybackProgress((current) => {
-        const next = current >= 0.995 ? 0 : Math.min(1, current + 0.018);
-        const nextIndex = Math.min(
-          directorShots.length - 1,
-          Math.floor(next * directorShots.length),
-        );
-        setActiveDirectorIndex(nextIndex);
-        return next;
-      });
-    }, 120);
-
-    return () => window.clearInterval(timer);
-  }, [directorShots.length, isPreviewPlaying, videoUrl]);
 
   const steps = [
     {
@@ -247,8 +220,8 @@ function App() {
       detail: "生成普通话音频，患者可直接收听",
     },
     {
-      label: "视频片段",
-      detail: "生成图示、字幕和旁白节奏",
+      label: "手术分镜",
+      detail: "生成可播放动画、字幕和旁白节奏",
     },
     {
       label: "医生审核",
@@ -264,7 +237,6 @@ function App() {
     setProgress(0);
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
-    setIsPreviewPlaying(false);
 
     const timers = [1, 2, 3].map((value, index) =>
       window.setTimeout(() => setProgress(value), (index + 1) * 900),
@@ -289,7 +261,6 @@ function App() {
       setStatus("ready");
       setPlaybackProgress(0);
       setActiveDirectorIndex(0);
-      setIsPreviewPlaying(false);
     } catch (generationError) {
       setStatus("error");
       setProgress(0);
@@ -313,7 +284,6 @@ function App() {
     setError("");
     setPlaybackProgress(0);
     setActiveDirectorIndex(0);
-    setIsPreviewPlaying(false);
   };
 
   const playPatientAudio = () => {
@@ -337,13 +307,6 @@ function App() {
     );
     setPlaybackProgress(nextProgress);
     setActiveDirectorIndex(nextIndex);
-  };
-
-  const toggleStoryboardPreview = () => {
-    if (videoUrl) {
-      return;
-    }
-    setIsPreviewPlaying((current) => !current);
   };
 
   return (
@@ -530,12 +493,13 @@ function App() {
               </div>
             </article>
 
-            <article className="artifact storyboard-artifact">
-              <div className="artifact-head">
-                <Video size={18} />
-                <span>患者端视频预览</span>
-              </div>
-              {videoUrl ? (
+            {(videoUrl || isGenerating) && (
+              <article className="artifact storyboard-artifact">
+                <div className="artifact-head">
+                  <Video size={18} />
+                  <span>{videoUrl ? "手术动画宣教片" : "正在生成手术动画"}</span>
+                </div>
+                {videoUrl ? (
                 <div className="video-card">
                   <video
                     ref={videoRef}
@@ -549,52 +513,15 @@ function App() {
                     保存宣教片
                   </a>
                 </div>
-              ) : (
-                <div className={`storyboard-preview ${isPreviewPlaying ? "playing" : ""}`}>
-                  <button
-                    className="storyboard-stage"
-                    type="button"
-                    onClick={toggleStoryboardPreview}
-                    aria-label={isPreviewPlaying ? "暂停宣教片预览" : "播放宣教片预览"}
-                  >
-                    <div className="storyboard-screen">
-                      <div className="screen-scan" />
-                      <div className="screen-patient" />
-                      <div className="screen-doctor" />
-                      <div className="screen-monitor">
-                        <i />
-                        <i />
-                        <i />
-                      </div>
-                      <div className="screen-lens" />
-                      <span>{activeDirectorShot.focus}</span>
-                    </div>
-                    <div className="preview-play">
-                      {isPreviewPlaying ? <AudioLines size={19} /> : <Play size={19} fill="currentColor" />}
-                    </div>
-                  </button>
-                  <div className="preview-progress">
-                    <i style={{ width: `${previewProgress * 100}%` }} />
+                ) : (
+                  <div className="video-generating">
+                    <LoaderCircle size={22} />
+                    <strong>正在生成一条可播放的手术动画宣教片</strong>
+                    <p>完成后这里才会出现视频播放器，并同步到患者端预览。</p>
                   </div>
-                  <div className="storyboard">
-                    {directorShots.map((shot, index) => (
-                      <button
-                        className={`shot ${index === activeDirectorIndex ? "active" : ""}`}
-                        key={`${shot.focus}-${index}`}
-                        type="button"
-                        onClick={() => {
-                          setActiveDirectorIndex(index);
-                          setPlaybackProgress(index / directorShots.length);
-                        }}
-                      >
-                        <span>{String(index + 1).padStart(2, "0")}</span>
-                        <p>{shot.subtitle}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </article>
+                )}
+              </article>
+            )}
           </div>
         </section>
 
@@ -629,16 +556,18 @@ function App() {
                   <Play size={15} fill="currentColor" />
                 </span>
               </button>
-              <div className="phone-sync">
-                <div className="phone-sync-head">
-                  <span>视频预览进度</span>
-                  <strong>{Math.round(previewProgress * 100)}%</strong>
+              {videoUrl && (
+                <div className="phone-sync">
+                  <div className="phone-sync-head">
+                    <span>视频播放进度</span>
+                    <strong>{Math.round(playbackProgress * 100)}%</strong>
+                  </div>
+                  <div className="phone-sync-bar">
+                    <i style={{ width: `${playbackProgress * 100}%` }} />
+                  </div>
+                  <p>{activeDirectorShot.subtitle}</p>
                 </div>
-                <div className="phone-sync-bar">
-                  <i style={{ width: `${previewProgress * 100}%` }} />
-                </div>
-                <p>{activeDirectorShot.subtitle}</p>
-              </div>
+              )}
               <div className="patient-steps">
                 {content.points.map((point) => (
                   <div key={point}>
