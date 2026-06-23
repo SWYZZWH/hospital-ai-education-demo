@@ -31,11 +31,21 @@ import {
 type CaseKey = "gastroscopy" | "ct" | "surgery";
 type GenerationStatus = "idle" | "generating" | "ready" | "error";
 
+type DirectorShot = {
+  title?: string;
+  camera: string;
+  motion: string;
+  focus: string;
+  subtitle: string;
+  voiceover: string;
+};
+
 type EducationContent = {
   patientTitle: string;
   patientBrief: string;
   points: string[];
   storyboard: string[];
+  directorShots?: DirectorShot[];
   warnings: string[];
   narration?: string;
 };
@@ -174,7 +184,10 @@ function App() {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [error, setError] = useState("");
+  const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [activeDirectorIndex, setActiveDirectorIndex] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const selectedCase = useMemo(
     () => educationCases.find((item) => item.key === selectedKey) ?? educationCases[0],
@@ -185,6 +198,18 @@ function App() {
   const audioUrl = result?.audioUrl;
   const videoUrl = result?.videoUrl;
   const isGenerating = status === "generating";
+  const directorShots = useMemo(
+    () => buildDirectorShots(content, selectedCase),
+    [content, selectedCase],
+  );
+  const activeDirectorShot = directorShots[activeDirectorIndex] ?? directorShots[0];
+  const previewProgress =
+    status === "generating"
+      ? Math.min(0.92, (progress + 0.35) / 5)
+      : status === "ready"
+        ? playbackProgress
+        : playbackProgress;
+  const focusPosition = `${22 + activeDirectorIndex * 19}%`;
 
   const steps = [
     {
@@ -200,8 +225,8 @@ function App() {
       detail: "生成普通话宣教音频，可直接播放",
     },
     {
-      label: "分镜动画视频",
-      detail: "合成场景动作、字幕和旁白",
+      label: "AI 导演台",
+      detail: "生成镜头语言、画面运动、字幕和旁白",
     },
     {
       label: "医生审核",
@@ -215,6 +240,8 @@ function App() {
     setError("");
     setResult(null);
     setProgress(0);
+    setPlaybackProgress(0);
+    setActiveDirectorIndex(0);
 
     const timers = [1, 2, 3].map((value, index) =>
       window.setTimeout(() => setProgress(value), (index + 1) * 900),
@@ -237,6 +264,8 @@ function App() {
       setProgress(4);
       setApproved(true);
       setStatus("ready");
+      setPlaybackProgress(0);
+      setActiveDirectorIndex(0);
     } catch (generationError) {
       setStatus("error");
       setProgress(0);
@@ -258,6 +287,8 @@ function App() {
     setStatus("idle");
     setResult(null);
     setError("");
+    setPlaybackProgress(0);
+    setActiveDirectorIndex(0);
   };
 
   const playPatientAudio = () => {
@@ -267,6 +298,20 @@ function App() {
     }
     player.currentTime = 0;
     void player.play();
+  };
+
+  const syncVideoPlayback = () => {
+    const player = videoRef.current;
+    if (!player || !Number.isFinite(player.duration) || player.duration <= 0) {
+      return;
+    }
+    const nextProgress = Math.min(1, Math.max(0, player.currentTime / player.duration));
+    const nextIndex = Math.min(
+      directorShots.length - 1,
+      Math.floor(nextProgress * directorShots.length),
+    );
+    setPlaybackProgress(nextProgress);
+    setActiveDirectorIndex(nextIndex);
   };
 
   return (
@@ -363,7 +408,7 @@ function App() {
         <section className="generation-panel">
           <div className="panel-title-row">
             <div>
-              <p className="section-label">AI 内容生产链路</p>
+              <p className="section-label">AI 导演台 / 宣教片生成器</p>
               <h2>{selectedCase.project}</h2>
             </div>
             <div className="trace-badge">
@@ -388,6 +433,52 @@ function App() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="director-console">
+            <div className="director-board">
+              <div className="director-topline">
+                <div>
+                  <span>SHOT {String(activeDirectorIndex + 1).padStart(2, "0")}</span>
+                  <strong>{activeDirectorShot.title || activeDirectorShot.focus}</strong>
+                </div>
+                <small>{status === "ready" ? "等待播放同步" : "生成镜头脚本中"}</small>
+              </div>
+              <div className="director-timeline">
+                {directorShots.map((shot, index) => (
+                  <button
+                    className={`director-shot ${index === activeDirectorIndex ? "active" : ""}`}
+                    key={`${shot.focus}-${index}`}
+                    type="button"
+                    onClick={() => setActiveDirectorIndex(index)}
+                  >
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <strong>{shot.focus}</strong>
+                    <small>{shot.motion}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div
+              className="medical-focus-stage"
+              style={{ "--focus-x": focusPosition } as CSSProperties}
+            >
+              <div className="focus-caption">
+                <span>关键医学图示局部放大</span>
+                <strong>{activeDirectorShot.focus}</strong>
+              </div>
+              <div className="anatomy-card">
+                <div className="scan-strip" />
+                <div className="jaw-curve">
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <i key={`tooth-${index}`} />
+                  ))}
+                </div>
+                <div className="implant-line" />
+                <div className="focus-lens" />
+              </div>
+              <p>{activeDirectorShot.subtitle}</p>
+            </div>
           </div>
 
           <div className="artifact-grid">
@@ -431,11 +522,17 @@ function App() {
             <article className="artifact storyboard-artifact">
               <div className="artifact-head">
                 <Video size={18} />
-                <span>分镜动画视频</span>
+                <span>可播放宣教片</span>
               </div>
               {videoUrl ? (
                 <div className="video-card">
-                  <video controls src={videoUrl} />
+                  <video
+                    ref={videoRef}
+                    controls
+                    src={videoUrl}
+                    onLoadedMetadata={syncVideoPlayback}
+                    onTimeUpdate={syncVideoPlayback}
+                  />
                   <a href={videoUrl} download>
                     <Download size={15} />
                     下载 MP4
@@ -443,10 +540,10 @@ function App() {
                 </div>
               ) : (
                 <div className="storyboard">
-                  {content.storyboard.map((shot, index) => (
-                    <div className="shot" key={shot}>
+                  {directorShots.map((shot, index) => (
+                    <div className="shot" key={`${shot.focus}-${index}`}>
                       <span>{String(index + 1).padStart(2, "0")}</span>
-                      <p>{shot}</p>
+                      <p>{shot.camera}</p>
                     </div>
                   ))}
                 </div>
@@ -486,6 +583,16 @@ function App() {
                   <Play size={15} fill="currentColor" />
                 </span>
               </button>
+              <div className="phone-sync">
+                <div className="phone-sync-head">
+                  <span>宣教片同步播放</span>
+                  <strong>{Math.round(previewProgress * 100)}%</strong>
+                </div>
+                <div className="phone-sync-bar">
+                  <i style={{ width: `${previewProgress * 100}%` }} />
+                </div>
+                <p>{activeDirectorShot.subtitle}</p>
+              </div>
               <div className="patient-steps">
                 {content.points.map((point) => (
                   <div key={point}>
@@ -515,7 +622,7 @@ function App() {
           <h2>把一次宣教任务做成可审核、可播放、可复用的内容闭环</h2>
           <p>
             本阶段突出一个真实可演示闭环：资料输入、模型生成宣教稿、语音文件、
-            MP4 分镜动画视频、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
+            可播放宣教片、医生审核、患者端展示。完整项目再扩展到院内接口、本地部署、
             多科室运营与内容质控。
           </p>
         </div>
@@ -548,6 +655,34 @@ function App() {
       </section>
     </main>
   );
+}
+
+function buildDirectorShots(
+  content: EducationContent,
+  selectedCase: EducationCase,
+): DirectorShot[] {
+  if (content.directorShots?.length) {
+    return content.directorShots.slice(0, 4);
+  }
+
+  const focusLabels =
+    selectedCase.key === "surgery"
+      ? ["影像与全身情况评估", "修复路径演示", "手术日配合", "术后护理同步"]
+      : selectedCase.key === "ct"
+        ? ["病史确认", "造影剂说明", "扫描配合", "留观饮水"]
+        : ["签到导览", "术前准备", "检查配合", "检查后观察"];
+
+  return selectedCase.storyboard.slice(0, 4).map((item, index) => {
+    const [title, body] = item.split("：");
+    return {
+      title: title || `镜头 ${index + 1}`,
+      camera: `${selectedCase.department}场景镜头，围绕“${title || item}”推进`,
+      motion: index === 0 ? "时间轴流动进入，资料节点逐项点亮" : "局部医学图示放大，字幕与旁白同步推进",
+      focus: focusLabels[index] || title || `镜头 ${index + 1}`,
+      subtitle: body || item,
+      voiceover: body || item,
+    };
+  });
 }
 
 function Metric({ label, value, sub }: { label: string; value: string; sub: string }) {

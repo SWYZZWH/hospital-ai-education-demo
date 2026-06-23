@@ -91,6 +91,87 @@ const cases = {
   },
 };
 
+const directorDefaults = {
+  gastroscopy: [
+    {
+      camera: "从候诊区推入到签到台，镜头跟随患者移动",
+      motion: "导视箭头沿地面流动，预约信息逐项点亮",
+      focus: "签到与身份核对",
+      subtitle: "按预约时间到达内镜中心，先完成签到和信息核对。",
+    },
+    {
+      camera: "俯拍术前准备清单，切到患者手中检查单",
+      motion: "禁食禁水时间轴从前一晚推进到检查前",
+      focus: "禁食禁水与用药提醒",
+      subtitle: "检查前按要求禁食禁水，长期用药和过敏史提前说明。",
+    },
+    {
+      camera: "侧面展示检查床、医生和内镜设备位置",
+      motion: "呼吸提示波形缓慢起伏，镜头局部放大配合姿势",
+      focus: "体位与呼吸配合",
+      subtitle: "检查中听从医护提示，保持放松并配合体位。",
+    },
+    {
+      camera: "从观察区拉远到离院指引牌",
+      motion: "观察倒计时、饮食恢复和异常反馈依次亮起",
+      focus: "观察与异常处理",
+      subtitle: "检查后短暂观察，如有持续不适及时联系医院。",
+    },
+  ],
+  ct: [
+    {
+      camera: "从影像科登记台平移到资料核对界面",
+      motion: "过敏史、肾功能、检查单三个字段依次确认",
+      focus: "病史与过敏史确认",
+      subtitle: "检查前需要确认过敏史、肾功能和相关用药情况。",
+    },
+    {
+      camera: "近景展示留置针和造影剂注射路径",
+      motion: "造影剂流向用柔和光线从手臂移动到扫描区域",
+      focus: "造影剂反应说明",
+      subtitle: "注射时可能有短暂发热感，通常很快缓解。",
+    },
+    {
+      camera: "CT 设备正面环形镜头，扫描床缓慢进入",
+      motion: "扫描环发光，语音提示保持静止",
+      focus: "扫描过程配合",
+      subtitle: "扫描时保持静止，按语音提示完成吸气和屏气。",
+    },
+    {
+      camera: "从检查室切到休息区水杯和留观提示",
+      motion: "饮水、留观、异常反馈三张卡片顺序出现",
+      focus: "检查后留观",
+      subtitle: "检查后按医嘱适量饮水，留观期间如不适及时反馈。",
+    },
+  ],
+  surgery: [
+    {
+      camera: "医生工作台俯视镜头，CBCT 影像和口内模型并排展开",
+      motion: "影像切片横向扫过，种植区域被光圈局部放大",
+      focus: "影像与全身情况评估",
+      subtitle: "术前先完成口腔影像、咬合关系和全身情况评估。",
+    },
+    {
+      camera: "半透明口腔结构侧视图，镜头缓慢推进到修复路径",
+      motion: "治疗周期以流动时间轴呈现，关键节点逐个点亮",
+      focus: "修复步骤与治疗周期",
+      subtitle: "医生会说明修复步骤、治疗周期和需要配合的事项。",
+    },
+    {
+      camera: "手术日场景切到牙椅旁，器械从画面边缘进入",
+      motion: "器械路径沿种植位移动，配合点位出现呼吸节奏提示",
+      focus: "手术当天配合",
+      subtitle: "手术当天请携带资料，按现场医护指导完成配合。",
+    },
+    {
+      camera: "从术后护理清单拉近到患者手机提醒",
+      motion: "清洁、饮食、复诊三项护理卡片同步进入手机预览",
+      focus: "术后护理与复诊",
+      subtitle: "术后保持口腔清洁，按医嘱饮食并及时复诊。",
+    },
+  ],
+};
+
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.use("/generated", express.static(generatedDir));
@@ -155,7 +236,8 @@ async function generateContent(selectedCase, doctorNotes) {
     "你是医院患者宣教内容生成助手。",
     "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文宣教内容。",
     "要求：只输出 JSON，不输出 Markdown；不要诊断、不要替代医生医嘱；避免技术实现、模型名称和内部术语；语气专业、清楚、安抚。",
-    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；warnings 三条；narration 字符串，220-320 字。",
+    "你还要像医疗宣教片导演一样输出镜头语言，不要只写标题和要点。",
+    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，220-320 字。",
     `科室：${selectedCase.department}`,
     `项目：${selectedCase.project}`,
     `患者对象：${selectedCase.audience}`,
@@ -200,6 +282,7 @@ async function generateContent(selectedCase, doctorNotes) {
 
 function fallbackContent(selectedCase, doctorNotes) {
   const notes = doctorNotes ? `医生补充提醒：${doctorNotes}` : "";
+  const directorShots = buildDirectorShots(selectedCase);
   return {
     patientTitle: selectedCase.patientTitle,
     patientBrief: notes
@@ -207,11 +290,12 @@ function fallbackContent(selectedCase, doctorNotes) {
       : selectedCase.patientBrief,
     points: selectedCase.points,
     storyboard: selectedCase.storyboard,
+    directorShots,
     warnings: selectedCase.warnings,
     narration: [
       `您好，下面为您说明${selectedCase.project}的主要注意事项。`,
       selectedCase.patientBrief,
-      selectedCase.points.join("。"),
+      directorShots.map((shot) => shot.voiceover).join("。"),
       "以上内容仅用于就诊前宣教，具体安排请以医生和现场工作人员指导为准。",
     ].join(""),
   };
@@ -233,9 +317,43 @@ function normalizeContent(content, fallback) {
     patientBrief: firstString(content.patientBrief, fallback.patientBrief),
     points: firstArray(content.points, fallback.points, 3),
     storyboard: firstArray(content.storyboard, fallback.storyboard, 4),
+    directorShots: normalizeDirectorShots(content.directorShots, fallback),
     warnings: firstArray(content.warnings, fallback.warnings, 3),
     narration: firstString(content.narration, fallback.narration),
   };
+}
+
+function buildDirectorShots(selectedCase) {
+  const key = Object.entries(cases).find(([, value]) => value === selectedCase)?.[0] || "surgery";
+  const defaults = directorDefaults[key] || directorDefaults.surgery;
+  return selectedCase.storyboard.slice(0, 4).map((item, index) => {
+    const [title, body] = item.split("：");
+    const preset = defaults[index] || defaults[0];
+    return {
+      title: sanitizeText(title || `镜头 ${index + 1}`),
+      camera: preset.camera,
+      motion: preset.motion,
+      focus: preset.focus,
+      subtitle: preset.subtitle,
+      voiceover: sanitizeText(body || preset.subtitle),
+    };
+  });
+}
+
+function normalizeDirectorShots(value, fallback) {
+  const input = Array.isArray(value) ? value : fallback.directorShots;
+  const base = fallback.directorShots;
+  return base.map((fallbackShot, index) => {
+    const source = input[index] || {};
+    return {
+      title: firstString(source.title, fallbackShot.title).slice(0, 34),
+      camera: firstString(source.camera, fallbackShot.camera).slice(0, 80),
+      motion: firstString(source.motion, fallbackShot.motion).slice(0, 80),
+      focus: firstString(source.focus, fallbackShot.focus).slice(0, 30),
+      subtitle: firstString(source.subtitle, fallbackShot.subtitle).slice(0, 80),
+      voiceover: firstString(source.voiceover, fallbackShot.voiceover).slice(0, 120),
+    };
+  });
 }
 
 function firstString(value, fallback) {
@@ -285,18 +403,15 @@ async function generateAudio(text, audioPath) {
 async function generateVideo(content, selectedCase, audioPath, videoPath, id) {
   const segmentPaths = [];
   const audioDuration = await getMediaDuration(audioPath);
-  const scenes = [
-    {
-      label: selectedCase.department,
-      title: content.patientTitle,
-      body: content.patientBrief,
-    },
-    ...content.storyboard.slice(0, 3).map((item, index) => ({
-      label: `步骤 ${index + 1}`,
-      title: item.split("：")[0] || `重点 ${index + 1}`,
-      body: item,
-    })),
-  ];
+  const shots = normalizeDirectorShots(content.directorShots, {
+    directorShots: buildDirectorShots(selectedCase),
+  });
+  const scenes = shots.map((shot, index) => ({
+    ...shot,
+    label: index === 0 ? selectedCase.department : `镜头 ${index + 1}`,
+    title: shot.title || content.storyboard[index]?.split("：")[0] || `镜头 ${index + 1}`,
+    body: shot.voiceover || shot.subtitle,
+  }));
   const sceneDuration = audioDuration / scenes.length;
 
   for (const [index, scene] of scenes.entries()) {
@@ -418,7 +533,7 @@ function renderStoryboardFrame(scene, selectedCase, index, progress) {
   const accent = selectedCase.accent;
   const sceneProgress = easeInOut(progress);
   const titleLines = wrapText(scene.title, 15, 2);
-  const subtitleLines = wrapText(scene.body, 26, 3);
+  const subtitleLines = wrapText(scene.subtitle || scene.body, 26, 3);
   const titleSvg = titleLines
     .map((line, lineIndex) => text(line, 78, 124 + lineIndex * 50, 38, 900))
     .join("");
@@ -454,6 +569,10 @@ function renderStoryboardFrame(scene, selectedCase, index, progress) {
     <rect x="78" y="78" width="172" height="38" rx="19" fill="${accent}" opacity="0.14"/>
     ${text(scene.label, 104, 105, 21, 800, accent)}
     ${titleSvg}
+    <rect x="642" y="80" width="182" height="38" rx="19" fill="${accent}" opacity="0.12"/>
+    ${text("镜头语言", 670, 106, 18, 800, "#2d5058")}
+    <rect x="642" y="128" width="182" height="38" rx="19" fill="#142328" opacity="0.08"/>
+    ${text(scene.focus || "局部放大", 670, 154, 18, 800, "#2d5058")}
     <rect x="80" y="206" width="740" height="356" rx="36" fill="#f7fbfa" stroke="#dbe9e4" stroke-width="2"/>
     ${sceneArt}
     <rect x="852" y="84" width="312" height="400" rx="34" fill="#f9fcfb" stroke="#dce9e5" stroke-width="2"/>
@@ -461,7 +580,7 @@ function renderStoryboardFrame(scene, selectedCase, index, progress) {
     ${text(`0${index + 1} / 04`, 1056, 128, 22, 900, accent)}
     ${stepCards}
     <rect x="854" y="514" width="312" height="52" rx="26" fill="${accent}" opacity="${pulse.toFixed(2)}"/>
-    ${text("旁白同步中", 898, 548, 24, 900, "#ffffff")}
+    ${text(scene.focus || "旁白同步中", 898, 548, 24, 900, "#ffffff")}
     <circle cx="${1115 + Math.sin(progress * Math.PI * 5) * 10}" cy="539" r="14" fill="#eaf8a7"/>
     <rect x="78" y="582" width="714" height="96" rx="30" fill="#13282d"/>
     ${subtitleSvg}
