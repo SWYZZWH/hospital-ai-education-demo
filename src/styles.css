@@ -55,7 +55,6 @@ button:disabled {
 .topbar,
 .metric-strip,
 .workspace-grid,
-.display-band,
 .reserved-section {
   position: relative;
   z-index: 1;
@@ -284,7 +283,6 @@ h3 {
 .input-panel,
 .generation-panel,
 .patient-panel,
-.display-band,
 .reserved-section {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -475,265 +473,94 @@ h3 {
   line-height: 1.45;
 }
 
-.director-console {
+.review-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr) 220px;
   gap: 10px;
   margin-bottom: 10px;
 }
 
-.director-board,
-.medical-focus-stage {
-  min-height: 250px;
+.review-copy,
+.send-panel {
+  min-height: 118px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #ffffff;
 }
 
-.director-board {
-  padding: 15px;
-  overflow: hidden;
-}
-
-.director-topline {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+.review-copy {
+  display: grid;
   gap: 12px;
-  margin-bottom: 14px;
+  padding: 14px;
 }
 
-.director-topline span,
-.director-topline small,
-.focus-caption span {
+.review-copy-head span,
+.send-panel span {
+  display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
 }
 
-.director-topline strong,
-.director-topline span {
+.review-copy-head strong,
+.send-panel strong {
   display: block;
-}
-
-.director-topline strong {
-  margin-top: 5px;
-  font-size: 20px;
-  line-height: 1.2;
-}
-
-.director-timeline {
-  position: relative;
-  display: grid;
-  gap: 10px;
-}
-
-.director-timeline::before {
-  position: absolute;
-  top: 18px;
-  bottom: 18px;
-  left: 24px;
-  width: 3px;
-  border-radius: 999px;
-  content: "";
-  background: linear-gradient(to bottom, var(--mint), rgba(201, 120, 53, 0.24));
-  animation: timelineFlow 1.6s linear infinite;
-}
-
-.director-shot {
-  position: relative;
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 48px;
-  padding: 9px 10px;
-  border: 1px solid rgba(24, 47, 58, 0.1);
-  border-radius: 8px;
-  background: #f8fbfa;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.director-shot span {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 50%;
-  color: white;
-  background: var(--deep);
-  font-size: 12px;
-  font-weight: 900;
-  z-index: 1;
-}
-
-.director-shot strong,
-.director-shot small {
-  display: block;
-  grid-column: 2;
-}
-
-.director-shot strong {
-  margin-bottom: 4px;
-  font-size: 14px;
-}
-
-.director-shot small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.director-shot.active {
-  transform: none;
-  background: #edf8f5;
-  box-shadow: inset 0 0 0 1px rgba(19, 143, 132, 0.2);
-}
-
-.director-shot.active span {
-  background: var(--mint);
-  box-shadow: none;
-}
-
-.medical-focus-stage {
-  position: relative;
-  overflow: hidden;
-  padding: 15px;
-  background: #203940;
-  color: #ffffff;
-}
-
-.focus-caption {
-  position: relative;
-  z-index: 2;
-}
-
-.focus-caption strong,
-.focus-caption span {
-  display: block;
-}
-
-.focus-caption strong {
-  margin-top: 5px;
-  font-size: 19px;
+  margin-top: 6px;
+  font-size: 18px;
   line-height: 1.25;
 }
 
-.anatomy-card {
-  position: relative;
-  height: 138px;
-  margin: 18px 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+.review-note {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
+  background: #f4f8f7;
 }
 
-.scan-strip {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(234, 248, 167, 0.12) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(234, 248, 167, 0.09) 1px, transparent 1px);
-  background-size: 26px 26px;
-  transform: translateX(-26px);
-  animation: scanMove 1.8s linear infinite;
+.review-note svg {
+  color: var(--mint);
 }
 
-.jaw-curve {
-  position: absolute;
-  left: 32px;
-  right: 32px;
-  bottom: 27px;
-  display: flex;
-  justify-content: space-between;
-  transform: rotate(-5deg);
-}
-
-.jaw-curve i {
-  width: 22px;
-  height: 46px;
-  border-radius: 11px 11px 14px 14px;
-  background: #f7efe4;
-  box-shadow: inset 0 -8px 0 rgba(201, 120, 53, 0.14);
-}
-
-.implant-line {
-  position: absolute;
-  left: 16%;
-  right: 16%;
-  top: 54px;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, #eaf8a7, var(--mint), transparent);
-  animation: implantPulse 1.3s ease-in-out infinite alternate;
-}
-
-.focus-lens {
-  position: absolute;
-  top: 24px;
-  left: var(--focus-x);
-  width: 82px;
-  height: 82px;
-  border: 3px solid #eaf8a7;
-  border-radius: 50%;
-  background: rgba(234, 248, 167, 0.1);
-  box-shadow:
-    0 0 0 9px rgba(234, 248, 167, 0.09),
-    0 18px 36px rgba(0, 0, 0, 0.24);
-  transform: translateX(-50%);
-  transition: left 260ms ease;
-}
-
-.focus-lens::after {
-  position: absolute;
-  right: -22px;
-  bottom: -14px;
-  width: 34px;
-  height: 5px;
-  border-radius: 999px;
-  content: "";
-  background: #eaf8a7;
-  transform: rotate(38deg);
-}
-
-.medical-focus-stage p {
-  position: relative;
-  z-index: 2;
+.review-note p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.76);
+  color: #43545c;
   font-size: 13px;
   line-height: 1.55;
 }
 
-@keyframes timelineFlow {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 0 80px;
-  }
+.send-panel {
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  background: #203940;
+  color: white;
+}
+
+.send-panel span {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.send-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--deep);
+  background: #eaf8a7;
+  cursor: pointer;
+  font-weight: 900;
 }
 
 @keyframes scanMove {
   to {
     transform: translateX(0);
-  }
-}
-
-@keyframes implantPulse {
-  from {
-    opacity: 0.55;
-    transform: scaleX(0.82);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
   }
 }
 
@@ -1333,65 +1160,6 @@ h3 {
   font-size: 12px;
 }
 
-.display-band {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 12px;
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #ffffff;
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
-.display-left .panel-heading,
-.display-left p {
-  color: var(--muted);
-}
-
-.display-left h2 {
-  max-width: 680px;
-  margin-bottom: 12px;
-}
-
-.display-left p {
-  max-width: 760px;
-  margin-bottom: 0;
-  line-height: 1.72;
-}
-
-.display-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.data-orb {
-  min-height: 96px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f8fbfa;
-}
-
-.data-orb svg {
-  color: var(--mint);
-}
-
-.data-orb strong {
-  display: block;
-  margin: 14px 0 5px;
-  font-size: clamp(22px, 2vw, 34px);
-  line-height: 1;
-}
-
-.data-orb span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .reserved-section {
   margin-top: 10px;
   padding: 14px;
@@ -1463,8 +1231,7 @@ h3 {
   }
 
   .flow-rail,
-  .director-console,
-  .display-stats,
+  .review-workbench,
   .reserved-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1486,8 +1253,7 @@ h3 {
 
   .topbar,
   .panel-title-row,
-  .display-band,
-  .reserved-title {
+    .reserved-title {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1500,11 +1266,9 @@ h3 {
 
   .metric-strip,
   .workspace-grid,
-  .artifact-grid,
-  .director-console,
-  .display-band,
-  .display-stats,
-  .reserved-grid {
+    .artifact-grid,
+    .review-workbench,
+    .reserved-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1520,11 +1284,6 @@ h3 {
 
   .flow-step {
     min-height: 96px;
-  }
-
-  .director-board,
-  .medical-focus-stage {
-    min-height: auto;
   }
 
   .flow-step::after {
@@ -1562,9 +1321,8 @@ h3 {
   .topbar,
   .input-panel,
   .generation-panel,
-  .patient-panel,
-  .display-band,
-  .reserved-section {
+    .patient-panel,
+    .reserved-section {
     border-radius: 18px;
   }
 

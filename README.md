@@ -1,6 +1,6 @@
-# Hospital AI Education Workspace
+# Hospital Patient Education Workspace
 
-医院 AI 宣教内容生成、语音宣教与视频合成工作台。
+医院患者宣教内容编辑、审核与发送工作台。
 
 ## Run
 

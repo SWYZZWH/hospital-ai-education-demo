@@ -1,17 +1,13 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
   AudioLines,
   BookOpenText,
   CheckCircle2,
   ClipboardCheck,
-  DatabaseZap,
   Download,
   FileAudio,
   FileText,
-  Gauge,
   Hospital,
-  LayoutDashboard,
   Link2,
   LoaderCircle,
   LockKeyhole,
@@ -19,12 +15,13 @@ import {
   MonitorCheck,
   Play,
   QrCode,
-  RadioTower,
   ScanLine,
+  Send,
   ShieldCheck,
   Smartphone,
   Sparkles,
   Stethoscope,
+  UserRoundCheck,
   Video,
 } from "lucide-react";
 
@@ -147,36 +144,36 @@ const educationCases: EducationCase[] = [
   },
 ];
 
-const systemModules = [
+const reviewChecks = [
   {
-    title: "院内账号",
-    text: "按医生、护士、科室管理员区分审核权限",
-    icon: LockKeyhole,
-    status: "已启用",
+    title: "禁忌与风险提醒",
+    text: "保留禁食、麻醉、慢病用药等必须人工确认的提示",
+    icon: ShieldCheck,
+    status: "需确认",
   },
   {
-    title: "预约信息",
-    text: "读取检查项目、预约时间和患者宣教对象",
+    title: "预约信息核对",
+    text: "检查项目、预约时间、科室位置在发送前再次核对",
     icon: Link2,
-    status: "待连接",
+    status: "可核对",
   },
   {
-    title: "科室资料库",
-    text: "管理宣教材料版本，保留内容引用来源",
-    icon: DatabaseZap,
-    status: "可维护",
+    title: "医生确认留痕",
+    text: "记录生成、修改、确认与发送人，便于后续追溯",
+    icon: LockKeyhole,
+    status: "有记录",
   },
   {
-    title: "患者通知",
-    text: "通过二维码、短信或院内公众号发送宣教页",
+    title: "患者端发送",
+    text: "确认后通过二维码、短信或院内公众号发送给患者",
     icon: Smartphone,
-    status: "可发送",
+    status: "待确认",
   },
   {
-    title: "发布记录",
-    text: "记录生成、修改、审核和患者阅读状态",
+    title: "阅读反馈",
+    text: "患者阅读、语音播放和异常反馈回到科室列表",
     icon: MonitorCheck,
-    status: "有留痕",
+    status: "可查看",
   },
 ];
 
@@ -215,7 +212,6 @@ function App() {
       : status === "ready"
         ? playbackProgress
         : playbackProgress;
-  const focusPosition = `${22 + activeDirectorIndex * 19}%`;
 
   useEffect(() => {
     if (!isPreviewPlaying || videoUrl) {
@@ -386,9 +382,9 @@ function App() {
         </div>
       </header>
 
-      <section className="metric-strip" aria-label="科室今日宣教状态">
+      <section className="metric-strip" aria-label="科室今日宣教任务">
         <Metric label="待医生确认" value="3 份" sub="术前 / 检查 / 护理" />
-        <Metric label="今日已发送" value="24 人" sub="扫码页与语音同步" />
+        <Metric label="今日已发送" value="24 人" sub="短信与公众号同步" />
         <Metric label="患者已读" value="82%" sub="含播放进度回传" />
         <Metric label="异常反馈" value="0 条" sub="暂无高风险提醒" />
       </section>
@@ -471,49 +467,28 @@ function App() {
             })}
           </div>
 
-          <div className="director-console">
-            <div className="director-board">
-              <div className="director-topline">
-                <div>
-                  <span>片段 {String(activeDirectorIndex + 1).padStart(2, "0")}</span>
-                  <strong>{activeDirectorShot.title || activeDirectorShot.focus}</strong>
-                </div>
-                <small>{status === "ready" ? "可播放预览" : "按材料生成中"}</small>
+          <div className="review-workbench">
+            <div className="review-copy">
+              <div className="review-copy-head">
+                <span>发送前核对</span>
+                <strong>{content.warnings.join(" · ")}</strong>
               </div>
-              <div className="director-timeline">
-                {directorShots.map((shot, index) => (
-                  <button
-                    className={`director-shot ${index === activeDirectorIndex ? "active" : ""}`}
-                    key={`${shot.focus}-${index}`}
-                    type="button"
-                    onClick={() => setActiveDirectorIndex(index)}
-                  >
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <strong>{shot.focus}</strong>
-                    <small>{shot.motion}</small>
-                  </button>
-                ))}
+              <div className="review-note">
+                <UserRoundCheck size={18} />
+                <p>
+                  当前内容适合{selectedCase.audience}。请确认禁忌提醒、检查时间和离院注意事项后再发送。
+                </p>
               </div>
             </div>
-            <div
-              className="medical-focus-stage"
-              style={{ "--focus-x": focusPosition } as CSSProperties}
-            >
-              <div className="focus-caption">
-                <span>患者重点图示</span>
-                <strong>{activeDirectorShot.focus}</strong>
+            <div className="send-panel">
+              <div>
+                <span>患者端</span>
+                <strong>{approved ? "可发送" : "确认后发送"}</strong>
               </div>
-              <div className="anatomy-card">
-                <div className="scan-strip" />
-                <div className="jaw-curve">
-                  {Array.from({ length: 8 }).map((_, index) => (
-                    <i key={`tooth-${index}`} />
-                  ))}
-                </div>
-                <div className="implant-line" />
-                <div className="focus-lens" />
-              </div>
-              <p>{activeDirectorShot.subtitle}</p>
+              <button type="button">
+                <Send size={16} />
+                发送给患者
+              </button>
             </div>
           </div>
 
@@ -558,7 +533,7 @@ function App() {
             <article className="artifact storyboard-artifact">
               <div className="artifact-head">
                 <Video size={18} />
-                <span>可播放宣教片</span>
+                <span>患者端视频预览</span>
               </div>
               {videoUrl ? (
                 <div className="video-card">
@@ -656,7 +631,7 @@ function App() {
               </button>
               <div className="phone-sync">
                 <div className="phone-sync-head">
-                  <span>宣教片同步播放</span>
+                  <span>视频预览进度</span>
                   <strong>{Math.round(previewProgress * 100)}%</strong>
                 </div>
                 <div className="phone-sync-bar">
@@ -684,33 +659,13 @@ function App() {
         </aside>
       </section>
 
-      <section className="display-band">
-        <div className="display-left">
-          <div className="panel-heading">
-            <LayoutDashboard size={19} />
-            <span>科室宣教看板</span>
-          </div>
-          <h2>医生确认后，患者即可在手机端查看文字、语音和宣教片</h2>
-          <p>
-            当前页面面向科室日常使用：医生选择宣教项目，核对生成内容，
-            确认后发送给患者。患者端保留阅读进度、播放进度和异常反馈记录。
-          </p>
-        </div>
-        <div className="display-stats">
-          <DataOrb label="今日生成" value="24" icon={Activity} />
-          <DataOrb label="医生确认率" value="96%" icon={ClipboardCheck} />
-          <DataOrb label="患者完成阅读" value="82%" icon={Gauge} />
-          <DataOrb label="内容追溯" value="100%" icon={RadioTower} />
-        </div>
-      </section>
-
       <section className="reserved-section">
         <div className="reserved-title">
-          <p className="section-label">院内工作状态</p>
-          <h2>医生只需要看到任务、内容、发送状态和患者反馈</h2>
+          <p className="section-label">发送前检查</p>
+          <h2>所有内容先由医生确认，再进入患者端</h2>
         </div>
         <div className="reserved-grid">
-          {systemModules.map((module) => {
+          {reviewChecks.map((module) => {
             const Icon = module.icon;
             return (
               <article className="reserved-item" key={module.title}>
@@ -761,24 +716,6 @@ function Metric({ label, value, sub }: { label: string; value: string; sub: stri
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{sub}</small>
-    </article>
-  );
-}
-
-function DataOrb({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon: typeof Activity;
-}) {
-  return (
-    <article className="data-orb">
-      <Icon size={19} />
-      <strong>{value}</strong>
-      <span>{label}</span>
     </article>
   );
 }

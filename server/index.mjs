@@ -236,7 +236,7 @@ async function generateContent(selectedCase, doctorNotes) {
     "你是医院患者宣教内容生成助手。",
     "任务：根据科室、项目、患者对象和医生补充要求，生成患者能听懂、医生能审核的中文宣教内容。",
     "要求：只输出 JSON，不输出 Markdown；不要诊断、不要替代医生医嘱；避免技术实现、模型名称和内部术语；语气专业、清楚、安抚。",
-    "你还要像医疗宣教片导演一样输出镜头语言，不要只写标题和要点。",
+    "同时生成患者端视频预览素材，每一段都要像患者真正会看到的步骤说明，避免宣传口径、项目口径、模型名称和技术实现描述。",
     "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，220-320 字。",
     `科室：${selectedCase.department}`,
     `项目：${selectedCase.project}`,
