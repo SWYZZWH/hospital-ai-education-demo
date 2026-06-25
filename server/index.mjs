@@ -183,28 +183,28 @@ const directorDefaults = {
   ],
   surgery: [
     {
-      camera: "医生工作台俯视镜头，CBCT 影像和口内模型并排展开",
-      motion: "影像切片横向扫过，种植区域被光圈局部放大",
-      focus: "口腔与牙槽骨评估",
-      subtitle: "术前先检查口腔和牙槽骨条件，确认基础疾病与用药情况。",
+      camera: "口腔医学 3D 动画开场，无牙颌上下颌模型与 CBCT 影像并排展示",
+      motion: "镜头从面部支撑示意推进到牙槽骨轮廓，检查项目以轻量图标依次点亮",
+      focus: "术前评估与检查准备",
+      subtitle: "术前先评估口腔、牙槽骨和全身用药情况。",
     },
     {
-      camera: "半透明口腔结构侧视图，镜头缓慢推进到修复路径",
-      motion: "治疗周期以流动时间轴呈现，关键节点逐个点亮",
-      focus: "修复方案确认",
-      subtitle: "医生会根据骨量和修复目标，选择适合的修复方案。",
+      camera: "半透明牙槽骨模型上标出骨量和种植点位，活动义齿、覆盖义齿、固定修复以三个简洁模型对比",
+      motion: "三种方案从左到右逐项出现，稳定性和能否摘戴用图标轻提示",
+      focus: "修复方案选择",
+      subtitle: "医生会根据骨量和修复目标，选择适合的修复方式。",
     },
     {
-      camera: "手术日场景切到牙椅旁，器械从画面边缘进入",
-      motion: "器械路径沿种植位移动，配合点位出现呼吸节奏提示",
-      focus: "种植体放入过程",
-      subtitle: "麻醉后放入种植体，等待稳定结合，再安装连接结构。",
+      camera: "非血腥 3D 剖面动画展示种植体进入牙槽骨模型，避开真人口腔手术画面",
+      motion: "种植体沿预设点位缓慢就位，随后骨结合稳定过程用柔和光圈表示",
+      focus: "种植体植入与稳定",
+      subtitle: "麻醉后放入种植体，等待逐渐稳定结合。",
     },
     {
-      camera: "从术后护理清单拉近到患者手机提醒",
-      motion: "清洁、饮食、复诊三项护理卡片同步进入手机预览",
-      focus: "义齿修复完成",
-      subtitle: "最后制作并戴入口内义齿，调整咬合，安排复查。",
+      camera: "连接结构和义齿在 3D 牙颌模型上依次就位，最后切到复查日历和清洁提醒",
+      motion: "义齿戴入后咬合线微调，饮食、清洁、复查三张小卡片顺序出现",
+      focus: "义齿戴入与术后复查",
+      subtitle: "最后戴入口内义齿，调整咬合，并按医嘱复查维护。",
     },
   ],
 };
@@ -706,15 +706,18 @@ function buildVideoPrompt(content, selectedCase) {
       return `${index + 1}. ${shot.focus}: ${shot.subtitle}`;
     })
     .join(" ");
+  const narration = cleanNarrationText(content.narration || content.patientBrief);
 
   return [
-    "Create a polished 15-second hospital patient education video in Chinese hospital setting.",
-    "Scene style: clean realistic medical education film, calm lighting, professional doctors and patient, no blood, no gore, no graphic surgery, no scary imagery.",
+    "Create a polished Chinese dental patient education video for an oral prosthodontics scenario.",
+    "Primary visual language: clean 3D oral medical animation, CBCT review, jawbone and denture models, simple clinical icons, warm professional dental clinic context.",
+    "Do not make a generic hospital B-roll video. Do not show unrelated wards, nurses walking corridors, dashboards, marketing posters, or random patient drama.",
+    "No blood, no gore, no exposed tissue, no graphic surgery close-ups, no distorted teeth, no unrealistic anatomy.",
     `Department: ${selectedCase.department}. Topic: ${selectedCase.project}. Patient audience: ${selectedCase.audience}.`,
+    `Patient narration to follow: ${narration}`,
     `Storyboard: ${shotText}`,
-    "For dental implant restoration education, show CBCT scan review, dental chair consultation, non-graphic instrument preparation, patient phone aftercare reminder.",
-    "Camera language: smooth clinical dolly, close-up of medical illustrations and patient checklist, readable subtitle-safe composition, realistic but non-invasive.",
-    "Avoid: marketing poster style, UI dashboard screenshots, text-heavy slides, distorted teeth, blood, exposed tissue, surgical close-up gore, unrealistic anatomy.",
+    "The video must explain edentulous jaw restoration, not general dental hygiene. Keep pre-op and post-op brief; spend more visual time on treatment plan, implant support, connection structure, and denture placement.",
+    "Camera language: smooth macro movement, clear model-based medical explanation, readable subtitle-safe composition, realistic but non-invasive.",
   ].join(" ");
 }
 
@@ -722,18 +725,20 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
   const prefix = index === 0
     ? "这是完整宣教片的开头段。"
     : "请基于视频1继续向后延长，不要重头开始，不要改换主视觉风格；从上一段尾帧自然衔接。";
+  const fullNarration = cleanNarrationText(content.narration || content.patientBrief);
   return [
-    `生成一段中文医院患者宣教视频，${prefix}当前是第 ${index + 1}/${total} 段。`,
+    `生成一段口腔科患者说明视频，${prefix}当前是第 ${index + 1}/${total} 段。`,
     `科室：${selectedCase.department}。主题：${selectedCase.project}。患者对象：${selectedCase.audience}。`,
     `本段重点：${shot.focus}。`,
     `画面安排：${shot.camera}；${shot.motion}。`,
     `本段旁白：${shot.voiceover || shot.subtitle}`,
     `本段字幕：${shot.subtitle}`,
-    `整体宣教摘要：${content.patientBrief}`,
-    "全片中文医院患者宣教风格，16:9 横屏，720p 质感即可，段落之间必须风格一致。",
-    "请生成中文女声旁白，语气平稳亲和，尽量让画面分镜、字幕和旁白同步。",
-    "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要出现错误医学术语。",
-    "画面真实、干净、专业，适合给客户演示和患者端预览；不要血腥、不要暴露组织、不要恐怖医疗画面。",
+    `完整文案参考：${fullNarration}`,
+    "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看影像，但不要变成泛医院宣传片。",
+    "术前和术后画面简短，手术与修复过程画面更具体：种植点位、种植体就位、稳定结合、连接结构、义齿戴入要表达清楚。",
+    "全片 16:9 横屏，720p 质感即可，段落之间必须风格一致，医学术语要准确。",
+    "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要新增与文案无关的角色对白。",
+    "画面真实、干净、专业，适合给客户演示和患者端预览；严禁血腥、暴露组织、恐怖医疗画面和真实手术开刀特写。",
   ].join(" ");
 }
 
@@ -764,7 +769,7 @@ function buildSeedanceSegments(content, selectedCase, prompt) {
   const shots = normalizeDirectorShots(content.directorShots, {
     directorShots: buildDirectorShots(selectedCase),
   });
-  const totalDuration =
+  const requestedTotalDuration =
     Number.isFinite(seedanceTotalDuration) && seedanceTotalDuration >= 20
       ? Math.min(75, seedanceTotalDuration)
       : 45;
@@ -772,6 +777,10 @@ function buildSeedanceSegments(content, selectedCase, prompt) {
     Number.isFinite(seedanceSegmentDuration) && seedanceSegmentDuration >= 5
       ? Math.min(15, seedanceSegmentDuration)
       : 15;
+  const totalDuration = Math.min(
+    75,
+    Math.max(requestedTotalDuration, shots.length * segmentDuration),
+  );
   const segmentCount = Math.max(
     2,
     Math.min(shots.length, Math.ceil(totalDuration / segmentDuration)),
@@ -1053,7 +1062,12 @@ async function refreshSeedanceJob(job) {
     }
 
     try {
-      await downloadVideo(videoUrl, job.videoPath);
+      const segmentUrls = job.seedanceVideoUrls.filter(Boolean);
+      if (segmentUrls.length > 1) {
+        await downloadAndConcatVideos(segmentUrls, job.videoPath, job.id);
+      } else {
+        await downloadVideo(videoUrl, job.videoPath);
+      }
       job.status = "succeeded";
       job.progress = 1;
       job.videoUrl = `/generated/${job.id}.mp4`;
@@ -1349,6 +1363,65 @@ async function downloadVideo(videoUrl, outputPath) {
     }
   }
   throw lastError;
+}
+
+async function downloadAndConcatVideos(videoUrls, outputPath, id) {
+  const segmentPaths = [];
+  const concatPath = path.join(generatedDir, `${id}-seedance-segments.txt`);
+
+  try {
+    for (const [index, videoUrl] of videoUrls.entries()) {
+      const segmentPath = path.join(generatedDir, `${id}-seedance-${index}.mp4`);
+      await downloadVideo(videoUrl, segmentPath);
+      segmentPaths.push(segmentPath);
+    }
+
+    const concatBody = segmentPaths
+      .map((segmentPath) => `file '${segmentPath.replace(/'/g, "'\\''")}'`)
+      .join("\n");
+    await writeFile(concatPath, `${concatBody}\n`);
+
+    try {
+      await run("ffmpeg", [
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        concatPath,
+        "-c",
+        "copy",
+        outputPath,
+      ]);
+    } catch {
+      await run("ffmpeg", [
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        concatPath,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "21",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "160k",
+        outputPath,
+      ]);
+    }
+  } finally {
+    await Promise.all([
+      ...segmentPaths.map((segmentPath) => rm(segmentPath, { force: true })),
+      rm(concatPath, { force: true }),
+    ]);
+  }
 }
 
 async function downloadGoogleVideo(video, outputPath) {
