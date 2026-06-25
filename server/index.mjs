@@ -106,26 +106,28 @@ const cases = {
     accent: "#4477ce",
   },
   surgery: {
-    project: "无牙颌修复术前宣教",
+    project: "无牙颌修复术说明",
     department: "口腔修复科",
-    audience: "拟行种植修复患者",
+    audience: "全口牙齿缺失修复患者",
     source: "修复流程、术前检查、术后护理材料",
     tone: "专业、亲和、分步骤",
-    patientTitle: "种植修复术前准备",
+    patientTitle: "无牙颌修复术说明",
     patientBrief:
-      "术前需完成口腔检查、影像评估和全身情况确认。请保持口腔清洁，按医嘱调整用药，并在手术当天携带既往检查资料。",
+      "无牙颌修复术主要用于全口牙齿缺失后的功能恢复。医生会根据牙槽骨条件，选择活动义齿、种植覆盖义齿或固定种植修复，帮助恢复咀嚼、发音和面部支撑。",
     points: [
-      "术前完成影像资料和全身健康情况评估",
-      "如正在服用抗凝药、降糖药或有慢性病，请提前说明",
-      "术后需按医嘱复诊，保持口腔清洁并避免刺激性饮食",
+      "术前先完成口腔检查和影像评估，并如实告知基础疾病、用药史和过敏史。",
+      "治疗通常分阶段进行：医生先确定修复方案和种植体位置；如需种植，会在麻醉后放入种植体，待其稳定后再安装连接结构和义齿。",
+      "术后按医嘱用药和复查，前期选择软一点的食物，注意清洁维护；如明显疼痛、出血或义齿松动，请及时联系医生。",
     ],
     storyboard: [
-      "术前评估：影像、咬合、全身情况",
-      "方案沟通：修复步骤与治疗周期",
-      "手术当天：携带资料与配合事项",
-      "术后护理：清洁、饮食与复诊",
+      "术前准备：检查口腔和牙槽骨条件，确认基础疾病与用药情况",
+      "方案确认：根据骨量和修复目标，选择活动义齿、种植覆盖义齿或固定修复",
+      "手术过程：麻醉后放入种植体，等待稳定结合，再安装连接结构",
+      "修复完成：制作并戴入口内义齿，调整咬合，安排复查",
     ],
-    warnings: ["慢病用药", "影像评估", "复诊计划"],
+    warnings: ["基础疾病", "分阶段治疗", "复查维护"],
+    narration:
+      "您好，我是口腔科小助手。今天为您介绍无牙颌修复术。简单说，它是在全口牙齿缺失后，帮助您恢复咀嚼、发音和面部支撑。术前，医生会检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式。您只需要如实告知基础疾病、用药史和过敏史，并按要求完成检查。手术和修复通常分阶段进行。医生会先确定种植体的位置和数量；如果需要种植，会在麻醉后把种植体放入牙槽骨中，让它像人工牙根一样提供支撑。等种植体逐渐稳定后，再安装连接结构，最后制作并戴入口内义齿。不同方案的区别，主要在于义齿是否能自行摘戴、稳定性如何，以及接近天然牙的程度。术后请按医嘱用药和复查，前期选择软一点的食物，注意清洁维护。如果出现明显疼痛、出血、义齿松动或咬合不舒服，请及时联系医生。",
     accent: "#c97835",
   },
 };
@@ -187,26 +189,26 @@ const directorDefaults = {
     {
       camera: "医生工作台俯视镜头，CBCT 影像和口内模型并排展开",
       motion: "影像切片横向扫过，种植区域被光圈局部放大",
-      focus: "影像与全身情况评估",
-      subtitle: "术前先完成口腔影像、咬合关系和全身情况评估。",
+      focus: "口腔与牙槽骨评估",
+      subtitle: "术前先检查口腔和牙槽骨条件，确认基础疾病与用药情况。",
     },
     {
       camera: "半透明口腔结构侧视图，镜头缓慢推进到修复路径",
       motion: "治疗周期以流动时间轴呈现，关键节点逐个点亮",
-      focus: "修复步骤与治疗周期",
-      subtitle: "医生会说明修复步骤、治疗周期和需要配合的事项。",
+      focus: "修复方案确认",
+      subtitle: "医生会根据骨量和修复目标，选择适合的修复方案。",
     },
     {
       camera: "手术日场景切到牙椅旁，器械从画面边缘进入",
       motion: "器械路径沿种植位移动，配合点位出现呼吸节奏提示",
-      focus: "手术当天配合",
-      subtitle: "手术当天请携带资料，按现场医护指导完成配合。",
+      focus: "种植体放入过程",
+      subtitle: "麻醉后放入种植体，等待稳定结合，再安装连接结构。",
     },
     {
       camera: "从术后护理清单拉近到患者手机提醒",
       motion: "清洁、饮食、复诊三项护理卡片同步进入手机预览",
-      focus: "术后护理与复诊",
-      subtitle: "术后保持口腔清洁，按医嘱饮食并及时复诊。",
+      focus: "义齿修复完成",
+      subtitle: "最后制作并戴入口内义齿，调整咬合，安排复查。",
     },
   ],
 };
@@ -577,6 +579,7 @@ function fallbackContent(selectedCase, doctorNotes) {
     storyboard: selectedCase.storyboard,
     directorShots,
     warnings: selectedCase.warnings,
+    narration: selectedCase.narration,
   };
   return {
     ...content,
@@ -595,14 +598,18 @@ function parseJson(raw) {
 }
 
 function normalizeContent(content, fallback) {
-  return {
+  const normalized = {
     patientTitle: firstString(content.patientTitle, fallback.patientTitle),
     patientBrief: firstString(content.patientBrief, fallback.patientBrief),
     points: firstArray(content.points, fallback.points, 3),
     storyboard: firstArray(content.storyboard, fallback.storyboard, 4),
     directorShots: normalizeDirectorShots(content.directorShots, fallback),
     warnings: firstArray(content.warnings, fallback.warnings, 3),
-    narration: firstString(content.narration, fallback.narration),
+  };
+  const narration = fallback.narration || buildPatientNarration(normalized);
+  return {
+    ...normalized,
+    narration: firstNarration(narration, buildPatientNarration(normalized)),
   };
 }
 
@@ -643,6 +650,10 @@ function firstString(value, fallback) {
   return sanitizeText(value || fallback).slice(0, 420);
 }
 
+function firstNarration(value, fallback) {
+  return sanitizeText(value || fallback).slice(0, 900);
+}
+
 function firstArray(value, fallback, count) {
   const array = Array.isArray(value) ? value : fallback;
   return array
@@ -663,6 +674,11 @@ function buildNarration(content) {
 }
 
 function buildPatientNarration(content) {
+  const fixedNarration = cleanNarrationText(content.narration);
+  if (fixedNarration) {
+    return `${fixedNarration}。`;
+  }
+
   const points = Array.isArray(content.points) ? content.points.map(cleanNarrationText).filter(Boolean) : [];
   const warnings = Array.isArray(content.warnings) ? content.warnings.map(cleanNarrationText).filter(Boolean) : [];
   const brief = cleanNarrationText(content.patientBrief);
