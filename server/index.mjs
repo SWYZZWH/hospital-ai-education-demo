@@ -42,6 +42,7 @@ const seedanceVideoModel =
   process.env.SEEDANCE_VIDEO_MODEL || "doubao-seedance-2-0-fast-260128";
 const seedanceFallbackVideoModel =
   process.env.SEEDANCE_FALLBACK_VIDEO_MODEL || "";
+const seedanceVideoResolution = process.env.SEEDANCE_VIDEO_RESOLUTION || "480p";
 const seedanceMiniSampleTaskId = process.env.SEEDANCE_MINI_SAMPLE_TASK_ID || "";
 const seedanceRequireMini = process.env.SEEDANCE_REQUIRE_MINI === "true";
 const seedanceTotalDuration = Number(process.env.SEEDANCE_TOTAL_DURATION || 45);
@@ -736,7 +737,7 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
     `完整文案参考：${fullNarration}`,
     "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看影像，但不要变成泛医院宣传片。",
     "术前和术后画面简短，手术与修复过程画面更具体：种植点位、种植体就位、稳定结合、连接结构、义齿戴入要表达清楚。",
-    "全片 16:9 横屏，720p 质感即可，段落之间必须风格一致，医学术语要准确。",
+    `全片 16:9 横屏，${seedanceVideoResolution} 测试清晰度即可，段落之间必须风格一致，医学术语要准确。`,
     "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要新增与文案无关的角色对白。",
     "画面真实、干净、专业，适合给客户演示和患者端预览；严禁血腥、暴露组织、恐怖医疗画面和真实手术开刀特写。",
   ].join(" ");
@@ -828,6 +829,7 @@ async function createSeedanceTask(segment, previousVideoUrl = "") {
     generate_audio: true,
     ratio: "16:9",
     duration: segment.duration,
+    resolution: seedanceVideoResolution,
     watermark: false,
   };
   let data;
