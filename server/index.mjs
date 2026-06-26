@@ -704,7 +704,7 @@ function buildVideoPrompt(content, selectedCase) {
   });
   const shotText = shots
     .map((shot, index) => {
-      return `${index + 1}. ${shot.focus}: ${shot.subtitle}`;
+      return `${index + 1}. ${shot.focus}: ${shot.camera}; ${shot.motion}`;
     })
     .join(" ");
   const narration = cleanNarrationText(content.narration || content.patientBrief);
@@ -715,10 +715,11 @@ function buildVideoPrompt(content, selectedCase) {
     "Do not make a generic hospital B-roll video. Do not show unrelated wards, nurses walking corridors, dashboards, marketing posters, or random patient drama.",
     "No blood, no gore, no exposed tissue, no graphic surgery close-ups, no distorted teeth, no unrealistic anatomy.",
     `Department: ${selectedCase.department}. Topic: ${selectedCase.project}. Patient audience: ${selectedCase.audience}.`,
-    `Patient narration to follow: ${narration}`,
-    `Storyboard: ${shotText}`,
+    `Patient narration reference for visual pacing only: ${narration}`,
+    `Visual storyboard: ${shotText}`,
     "The video must explain edentulous jaw restoration, not general dental hygiene. Keep pre-op and post-op brief; spend more visual time on treatment plan, implant support, connection structure, and denture placement.",
-    "Camera language: smooth macro movement, clear model-based medical explanation, readable subtitle-safe composition, realistic but non-invasive.",
+    "Camera language: smooth macro movement, clear model-based medical explanation, clean composition, realistic but non-invasive.",
+    "Absolutely no on-screen text: no Chinese characters, no English words, no subtitles, no labels, no UI text, no title cards, no captions, no floating text boxes. Text and voiceover will be added later by the application.",
   ].join(" ");
 }
 
@@ -732,13 +733,13 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
     `科室：${selectedCase.department}。主题：${selectedCase.project}。患者对象：${selectedCase.audience}。`,
     `本段重点：${shot.focus}。`,
     `画面安排：${shot.camera}；${shot.motion}。`,
-    `本段旁白：${shot.voiceover || shot.subtitle}`,
-    `本段字幕：${shot.subtitle}`,
-    `完整文案参考：${fullNarration}`,
+    `本段视觉目标：用画面表达“${shot.focus}”，不要在画面里写出这句话。`,
+    `完整文案仅供理解节奏和医学含义，不能生成字幕或口播：${fullNarration}`,
     "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看影像，但不要变成泛医院宣传片。",
     "术前和术后画面简短，手术与修复过程画面更具体：种植点位、种植体就位、稳定结合、连接结构、义齿戴入要表达清楚。",
     `全片 16:9 横屏，${seedanceVideoResolution} 测试清晰度即可，段落之间必须风格一致，医学术语要准确。`,
-    "可以出现简洁中文字幕，但不要生成密集大段文字，不要出现英文，不要新增与文案无关的角色对白。",
+    "画面内严禁出现任何文字：不要中文字幕，不要英文，不要标签，不要标题，不要 UI 字，不要说明卡片，不要模型自动生成的汉字。字幕和旁白将由我们后期自己添加。",
+    "不要生成角色对白，不要生成旁白音频，不要让人物开口说话；只生成干净的视觉画面。",
     "画面真实、干净、专业，适合给客户演示和患者端预览；严禁血腥、暴露组织、恐怖医疗画面和真实手术开刀特写。",
   ].join(" ");
 }
@@ -826,7 +827,7 @@ async function createSeedanceTask(segment, previousVideoUrl = "") {
 
   const payload = {
     content,
-    generate_audio: true,
+    generate_audio: false,
     ratio: "16:9",
     duration: segment.duration,
     resolution: seedanceVideoResolution,
