@@ -184,28 +184,28 @@ const directorDefaults = {
   ],
   surgery: [
     {
-      camera: "口腔医学 3D 动画开场，无牙颌上下颌模型与 CBCT 影像并排展示",
-      motion: "镜头从面部支撑示意推进到牙槽骨轮廓，检查项目以轻量图标依次点亮",
+      camera: "口腔医学 3D 动画开场，只展示无牙颌上下颌模型和口腔 CBCT 切片，不出现胸片或全身影像",
+      motion: "镜头从面部支撑示意推进到牙槽骨轮廓，用无文字的高亮区域表现检查重点",
       focus: "术前评估与检查准备",
-      subtitle: "术前先评估口腔、牙槽骨和全身用药情况。",
+      subtitle: "医生会先检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式。",
     },
     {
       camera: "半透明牙槽骨模型上标出骨量和种植点位，活动义齿、覆盖义齿、固定修复以三个简洁模型对比",
-      motion: "三种方案从左到右逐项出现，稳定性和能否摘戴用图标轻提示",
+      motion: "三种方案以模型形态依次切换，用稳定程度和摘戴动作表现区别，不出现文字说明",
       focus: "修复方案选择",
-      subtitle: "医生会根据骨量和修复目标，选择适合的修复方式。",
+      subtitle: "医生会根据骨量和修复目标，选择活动义齿、种植覆盖义齿或固定种植修复。",
     },
     {
       camera: "非血腥 3D 剖面动画展示种植体进入牙槽骨模型，避开真人口腔手术画面",
       motion: "种植体沿预设点位缓慢就位，随后骨结合稳定过程用柔和光圈表示",
       focus: "种植体植入与稳定",
-      subtitle: "麻醉后放入种植体，等待逐渐稳定结合。",
+      subtitle: "如果需要种植，会在麻醉后把种植体放入牙槽骨，让它像人工牙根一样提供支撑。",
     },
     {
-      camera: "连接结构和义齿在 3D 牙颌模型上依次就位，最后切到复查日历和清洁提醒",
-      motion: "义齿戴入后咬合线微调，饮食、清洁、复查三张小卡片顺序出现",
+      camera: "连接结构和义齿在 3D 牙颌模型上依次就位，最后用牙刷清洁动作和复诊场景表现维护",
+      motion: "义齿戴入后咬合线微调，再切到软食、清洁和复查动作，不出现卡片或文字",
       focus: "义齿戴入与术后复查",
-      subtitle: "最后戴入口内义齿，调整咬合，并按医嘱复查维护。",
+      subtitle: "等种植体稳定后，再安装连接结构，制作并戴入口内义齿，术后按医嘱复查维护。",
     },
   ],
 };
@@ -704,22 +704,23 @@ function buildVideoPrompt(content, selectedCase) {
   });
   const shotText = shots
     .map((shot, index) => {
-      return `${index + 1}. ${shot.focus}: ${shot.camera}; ${shot.motion}`;
+      const shotNarration = cleanNarrationText(shot.voiceover || shot.subtitle);
+      return `${index + 1}. ${shot.focus}: narration meaning=${shotNarration}; visual=${shot.camera}; motion=${shot.motion}`;
     })
     .join(" ");
   const narration = cleanNarrationText(content.narration || content.patientBrief);
 
   return [
     "Create a polished Chinese dental patient education video for an oral prosthodontics scenario.",
-    "Primary visual language: clean 3D oral medical animation, CBCT review, jawbone and denture models, simple clinical icons, warm professional dental clinic context.",
-    "Do not make a generic hospital B-roll video. Do not show unrelated wards, nurses walking corridors, dashboards, marketing posters, or random patient drama.",
+    "Primary visual language: clean 3D oral medical animation, oral CBCT slices, jawbone and denture models, warm professional dental clinic context.",
+    "Do not make a generic hospital B-roll video. Do not show unrelated wards, nurses walking corridors, dashboards, marketing posters, chest X-rays, full-body scans, or random patient drama.",
     "No blood, no gore, no exposed tissue, no graphic surgery close-ups, no distorted teeth, no unrealistic anatomy.",
     `Department: ${selectedCase.department}. Topic: ${selectedCase.project}. Patient audience: ${selectedCase.audience}.`,
     `Patient narration reference for visual pacing only: ${narration}`,
     `Visual storyboard: ${shotText}`,
     "The video must explain edentulous jaw restoration, not general dental hygiene. Keep pre-op and post-op brief; spend more visual time on treatment plan, implant support, connection structure, and denture placement.",
     "Camera language: smooth macro movement, clear model-based medical explanation, clean composition, realistic but non-invasive.",
-    "Absolutely no on-screen text: no Chinese characters, no English words, no subtitles, no labels, no UI text, no title cards, no captions, no floating text boxes. Text and voiceover will be added later by the application.",
+    "Absolutely no on-screen text: no Chinese characters, no English words, no subtitles, no labels, no UI text, no title cards, no captions, no floating text boxes, no medical UI words. Text and voiceover will be added later by the application.",
   ].join(" ");
 }
 
@@ -727,18 +728,19 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
   const prefix = index === 0
     ? "这是完整宣教片的开头段。"
     : "请基于视频1继续向后延长，不要重头开始，不要改换主视觉风格；从上一段尾帧自然衔接。";
-  const fullNarration = cleanNarrationText(content.narration || content.patientBrief);
+  const shotNarration = cleanNarrationText(shot.voiceover || shot.subtitle);
   return [
     `生成一段口腔科患者说明视频，${prefix}当前是第 ${index + 1}/${total} 段。`,
     `科室：${selectedCase.department}。主题：${selectedCase.project}。患者对象：${selectedCase.audience}。`,
     `本段重点：${shot.focus}。`,
+    `本段对应旁白含义，仅用于理解画面，不要生成字幕、不要生成口播：${shotNarration}`,
     `画面安排：${shot.camera}；${shot.motion}。`,
-    `本段视觉目标：用画面表达“${shot.focus}”，不要在画面里写出这句话。`,
-    `完整文案仅供理解节奏和医学含义，不能生成字幕或口播：${fullNarration}`,
-    "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看影像，但不要变成泛医院宣传片。",
+    "本段只表现上面的旁白含义，不要提前表现后续段落，也不要重复前面段落。",
+    "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看口腔影像，但不要变成泛医院宣传片。",
+    "禁止出现胸片、肺部 X 光、全身扫描、病房、走廊、营销海报、医疗仪表盘和无关 UI 界面。",
     "术前和术后画面简短，手术与修复过程画面更具体：种植点位、种植体就位、稳定结合、连接结构、义齿戴入要表达清楚。",
     `全片 16:9 横屏，${seedanceVideoResolution} 测试清晰度即可，段落之间必须风格一致，医学术语要准确。`,
-    "画面内严禁出现任何文字：不要中文字幕，不要英文，不要标签，不要标题，不要 UI 字，不要说明卡片，不要模型自动生成的汉字。字幕和旁白将由我们后期自己添加。",
+    "画面内严禁出现任何文字：不要中文字幕，不要英文，不要标签，不要标题，不要 UI 字，不要说明卡片，不要模型自动生成的汉字或英文字母。字幕和旁白将由我们后期自己添加。",
     "不要生成角色对白，不要生成旁白音频，不要让人物开口说话；只生成干净的视觉画面。",
     "画面真实、干净、专业，适合给客户演示和患者端预览；严禁血腥、暴露组织、恐怖医疗画面和真实手术开刀特写。",
   ].join(" ");
