@@ -25,7 +25,7 @@ import {
   Video,
 } from "lucide-react";
 
-type CaseKey = "gastroscopy" | "ct" | "surgery";
+type CaseKey = "surgery";
 type GenerationStatus = "idle" | "generating" | "ready" | "error";
 
 type DirectorShot = {
@@ -78,69 +78,22 @@ type VideoJobResult = {
 
 const educationCases: EducationCase[] = [
   {
-    key: "gastroscopy",
-    department: "消化内镜中心",
-    project: "胃镜检查术前宣教",
-    audience: "首次胃镜检查患者",
-    source: "检查须知、禁食禁水要求、麻醉注意事项",
-    tone: "清晰、安抚、少术语",
-    patientTitle: "胃镜检查前准备",
-    patientBrief:
-      "明日检查前请按预约时间到达内镜中心。检查前 8 小时禁食，2 小时禁水；如有长期服药、过敏史或近期感冒，请提前告知医生。",
-    points: [
-      "检查前核对预约单、身份证件和既往病史",
-      "无痛胃镜需家属陪同，检查后当天不建议驾驶",
-      "检查后如出现持续腹痛、呕血或黑便，应及时联系医院",
-    ],
-    storyboard: [
-      "候诊区导览：患者按预约时段签到",
-      "检查前准备：禁食禁水与用药提醒",
-      "检查过程说明：配合体位与呼吸",
-      "检查后观察：离院、饮食与异常处理",
-    ],
-    warnings: ["禁食禁水", "麻醉评估", "家属陪同"],
-    accent: "#18a999",
-  },
-  {
-    key: "ct",
-    department: "医学影像科",
-    project: "增强 CT 检查宣教",
-    audience: "需增强扫描患者",
-    source: "造影剂说明、过敏史询问、检查流程",
-    tone: "准确、稳重、风险可控",
-    patientTitle: "增强 CT 检查说明",
-    patientBrief:
-      "增强 CT 需要使用造影剂以帮助医生观察病灶。检查前请主动告知过敏史、肾功能异常、甲状腺疾病及近期用药情况。",
-    points: [
-      "检查前完成过敏史与肾功能相关信息确认",
-      "注射造影剂时可能出现短暂发热感，通常会很快缓解",
-      "检查后建议适量饮水，帮助造影剂排出",
-    ],
-    storyboard: [
-      "登记区确认：病史、过敏史、检查单",
-      "注射前说明：造影剂反应与配合方式",
-      "扫描过程：保持静止与听从语音提示",
-      "检查后观察：饮水、留观与异常反馈",
-    ],
-    warnings: ["过敏史", "肾功能", "留观提醒"],
-    accent: "#4477ce",
-  },
-  {
     key: "surgery",
     department: "口腔修复科",
-    project: "无牙颌修复术说明",
+    project: "无牙颌全口义齿修复全流程说明",
     audience: "全口牙齿缺失修复患者",
-    source: "修复流程、术前检查、术后护理材料",
+    source: "无牙颌全口义齿修复流程、术前评估、方案选择、术后维护材料",
     tone: "专业、亲和、分步骤",
-    patientTitle: "无牙颌修复术说明",
+    patientTitle: "无牙颌全口义齿修复说明",
     patientBrief:
       "您好，我是口腔科小助手。今天为您介绍无牙颌修复术。简单说，它是在全口牙齿缺失后，帮助您恢复咀嚼、发音和面部支撑。术前，医生会检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式。您只需要如实告知基础疾病、用药史和过敏史，并按要求完成检查。手术和修复通常分阶段进行。医生会先确定种植体的位置和数量；如果需要种植，会在麻醉后把种植体放入牙槽骨中，让它像人工牙根一样提供支撑。等种植体逐渐稳定后，再安装连接结构，最后制作并戴入口内义齿。不同方案的区别，主要在于义齿是否能自行摘戴、稳定性如何，以及接近天然牙的程度。术后请按医嘱用药和复查，前期选择软一点的食物，注意清洁维护。如果出现明显疼痛、出血、义齿松动或咬合不舒服，请及时联系医生。",
     points: [],
     storyboard: [
-      "术前准备：检查口腔和牙槽骨条件，确认基础疾病与用药情况",
-      "方案确认：根据骨量和修复目标，选择活动义齿、种植覆盖义齿或固定修复",
-      "手术过程：麻醉后放入种植体，等待稳定结合，再安装连接结构",
-      "修复完成：制作并戴入口内义齿，调整咬合，安排复查",
+      "开场说明：全口牙齿缺失后，修复目标是恢复咀嚼、发音和面部支撑",
+      "术前评估：检查口腔黏膜、牙槽骨条件和口腔影像，确认基础疾病、用药史和过敏史",
+      "方案选择：根据骨量和修复目标，解释活动全口义齿、种植覆盖义齿和固定修复的差异",
+      "治疗流程：确定种植体位置和数量，必要时麻醉后植入种植体，稳定后安装连接结构并戴入口内义齿",
+      "复查维护：调整咬合，按医嘱用药复查，前期软食并清洁维护，疼痛出血松动或咬合不适及时联系医生",
     ],
     warnings: ["基础疾病", "分阶段治疗", "复查维护"],
     narration:
@@ -442,10 +395,10 @@ function App() {
         </div>
       </header>
 
-      <section className="metric-strip" aria-label="科室今日宣教任务">
-        <Metric label="待医生确认" value="3 份" sub="术前 / 检查 / 护理" />
-        <Metric label="今日已发送" value="24 人" sub="短信与公众号同步" />
-        <Metric label="患者已读" value="82%" sub="含播放进度回传" />
+      <section className="metric-strip" aria-label="口腔修复宣教任务">
+        <Metric label="核心方案" value="无牙颌" sub="全口义齿修复全流程" />
+        <Metric label="视频结构" value="5 段" sub="评估 / 方案 / 治疗 / 维护" />
+        <Metric label="患者已读" value="82%" sub="含语音与视频进度回传" />
         <Metric label="异常反馈" value="0 条" sub="暂无高风险提醒" />
       </section>
 
@@ -730,17 +683,15 @@ function buildDirectorShots(
   selectedCase: EducationCase,
 ): DirectorShot[] {
   if (content.directorShots?.length) {
-    return content.directorShots.slice(0, 4);
+    return content.directorShots.slice(0, 5);
   }
 
   const focusLabels =
     selectedCase.key === "surgery"
-      ? ["影像与全身情况评估", "修复路径演示", "手术日配合", "术后护理同步"]
-      : selectedCase.key === "ct"
-        ? ["病史确认", "造影剂说明", "扫描配合", "留观饮水"]
-        : ["签到导览", "术前准备", "检查配合", "检查后观察"];
+      ? ["修复目标", "术前评估", "方案选择", "治疗流程", "复查维护"]
+      : ["资料确认", "过程说明", "配合要点", "复查维护"];
 
-  return selectedCase.storyboard.slice(0, 4).map((item, index) => {
+  return selectedCase.storyboard.slice(0, 5).map((item, index) => {
     const [title, body] = item.split("：");
     return {
       title: title || `镜头 ${index + 1}`,
