@@ -3,7 +3,7 @@ import express from "express";
 import { nanoid } from "nanoid";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import sharp from "sharp";
 
@@ -302,9 +302,15 @@ app.post("/api/video-jobs", async (request, response) => {
     await mkdir(generatedDir, { recursive: true });
 
     const prompt = buildVideoPrompt(content, selectedCase);
+    const audioDurationSeconds = await getAudioDurationForGeneration(generationId);
 
     if (seedanceApiKey) {
-      const remoteTask = await createSeedanceVideo(content, selectedCase, prompt);
+      const remoteTask = await createSeedanceVideo(
+        content,
+        selectedCase,
+        prompt,
+        audioDurationSeconds,
+      );
       videoJobs.set(jobId, {
         id: jobId,
         provider: "seedance",
@@ -746,8 +752,8 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
   ].join(" ");
 }
 
-async function createSeedanceVideo(content, selectedCase, prompt) {
-  const segments = buildSeedanceSegments(content, selectedCase, prompt);
+async function createSeedanceVideo(content, selectedCase, prompt, targetDurationSeconds = null) {
+  const segments = buildSeedanceSegments(content, selectedCase, prompt, targetDurationSeconds);
   try {
     const firstTask = await createSeedanceTask(segments[0]);
     return { ids: [firstTask.id], segments };
@@ -769,25 +775,28 @@ async function createSeedanceVideo(content, selectedCase, prompt) {
   }
 }
 
-function buildSeedanceSegments(content, selectedCase, prompt) {
+function buildSeedanceSegments(content, selectedCase, prompt, targetDurationSeconds = null) {
   const shots = normalizeDirectorShots(content.directorShots, {
     directorShots: buildDirectorShots(selectedCase),
   });
-  const requestedTotalDuration =
+  const configuredTotalDuration =
     Number.isFinite(seedanceTotalDuration) && seedanceTotalDuration >= 20
       ? Math.min(75, seedanceTotalDuration)
       : 45;
+  const requestedTotalDuration =
+    Number.isFinite(targetDurationSeconds) && targetDurationSeconds >= 5
+      ? Math.min(75, Math.max(20, Math.ceil(targetDurationSeconds)))
+      : configuredTotalDuration;
   const segmentDuration =
     Number.isFinite(seedanceSegmentDuration) && seedanceSegmentDuration >= 5
       ? Math.min(15, seedanceSegmentDuration)
       : 15;
-  const totalDuration = Math.min(
-    75,
-    Math.max(requestedTotalDuration, shots.length * segmentDuration),
-  );
+  const totalDuration = Number.isFinite(targetDurationSeconds) && targetDurationSeconds >= 5
+    ? requestedTotalDuration
+    : Math.min(75, Math.max(requestedTotalDuration, shots.length * segmentDuration));
   const segmentCount = Math.max(
     2,
-    Math.min(shots.length, Math.ceil(totalDuration / segmentDuration)),
+    Math.min(5, Math.ceil(totalDuration / segmentDuration)),
   );
   const segments = [];
 
@@ -1677,6 +1686,24 @@ async function getMediaDuration(filePath) {
     throw new Error("无法读取生成音频时长");
   }
   return duration;
+}
+
+async function getAudioDurationForGeneration(generationId) {
+  if (!generationId) {
+    return null;
+  }
+
+  const audioPath = path.join(generatedDir, `${generationId}.mp3`);
+  try {
+    await access(audioPath);
+    return await getMediaDuration(audioPath);
+  } catch (error) {
+    console.warn("audio duration unavailable; using default video duration", {
+      generationId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 function renderStoryboardFrame(scene, selectedCase, index, progress) {
