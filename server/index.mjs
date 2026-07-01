@@ -107,21 +107,20 @@ const cases = {
     accent: "#4477ce",
   },
   surgery: {
-    project: "无牙颌全口义齿修复全流程说明",
+    project: "无牙颌修复术说明",
     department: "口腔修复科",
     audience: "全口牙齿缺失修复患者",
-    source: "无牙颌全口义齿修复流程、术前评估、方案选择、术后维护材料",
+    source: "修复流程、术前检查、术后护理材料",
     tone: "专业、亲和、分步骤",
-    patientTitle: "无牙颌全口义齿修复说明",
+    patientTitle: "无牙颌修复术说明",
     patientBrief:
       "您好，我是口腔科小助手。今天为您介绍无牙颌修复术。简单说，它是在全口牙齿缺失后，帮助您恢复咀嚼、发音和面部支撑。术前，医生会检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式。您只需要如实告知基础疾病、用药史和过敏史，并按要求完成检查。手术和修复通常分阶段进行。医生会先确定种植体的位置和数量；如果需要种植，会在麻醉后把种植体放入牙槽骨中，让它像人工牙根一样提供支撑。等种植体逐渐稳定后，再安装连接结构，最后制作并戴入口内义齿。不同方案的区别，主要在于义齿是否能自行摘戴、稳定性如何，以及接近天然牙的程度。术后请按医嘱用药和复查，前期选择软一点的食物，注意清洁维护。如果出现明显疼痛、出血、义齿松动或咬合不舒服，请及时联系医生。",
     points: [],
     storyboard: [
-      "开场说明：全口牙齿缺失后，修复目标是恢复咀嚼、发音和面部支撑",
-      "术前评估：检查口腔黏膜、牙槽骨条件和口腔影像，确认基础疾病、用药史和过敏史",
-      "方案选择：根据骨量和修复目标，解释活动全口义齿、种植覆盖义齿和固定修复的差异",
-      "治疗流程：确定种植体位置和数量，必要时麻醉后植入种植体，稳定后安装连接结构并戴入口内义齿",
-      "复查维护：调整咬合，按医嘱用药复查，前期软食并清洁维护，疼痛出血松动或咬合不适及时联系医生",
+      "开场说明：今天为您介绍无牙颌修复术，它是在全口牙齿缺失后帮助恢复咀嚼、发音和面部支撑",
+      "术前准备：医生会检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式；患者如实告知基础疾病、用药史和过敏史，并按要求完成检查",
+      "手术过程：手术和修复通常分阶段进行，医生先确定种植体的位置和数量；如果需要种植，会在麻醉后把种植体放入牙槽骨中，让它像人工牙根一样提供支撑",
+      "修复维护：等种植体逐渐稳定后，再安装连接结构，最后制作并戴入口内义齿；不同方案的区别主要在于能否摘戴、稳定性和接近天然牙的程度；术后按医嘱用药和复查，前期软食并注意清洁维护，异常及时联系医生",
     ],
     warnings: ["基础疾病", "分阶段治疗", "复查维护"],
     narration:
@@ -187,32 +186,26 @@ const directorDefaults = {
     {
       camera: "口腔医学 3D 动画开场，展示全口牙齿缺失后的上下颌模型和面部支撑轮廓",
       motion: "镜头从自然面部轮廓过渡到牙颌支撑关系，用无文字高亮表现咀嚼、发音和面部支撑",
-      focus: "无牙颌修复目标",
-      subtitle: "全口牙齿缺失后，修复目标是恢复咀嚼、发音和面部支撑。",
+      focus: "无牙颌修复术作用",
+      subtitle: "今天为您介绍无牙颌修复术，它是在全口牙齿缺失后帮助恢复咀嚼、发音和面部支撑。",
     },
     {
       camera: "只展示口腔检查场景、无牙颌牙槽骨模型和口腔 CBCT 切片，不出现胸片或全身影像",
-      motion: "镜头从口腔黏膜检查过渡到牙槽骨轮廓，基础疾病、用药史和过敏史用无文字的档案动作表现",
-      focus: "术前评估与信息确认",
-      subtitle: "检查口腔黏膜、牙槽骨条件和口腔影像，确认基础疾病、用药史和过敏史。",
+      motion: "镜头从口腔检查过渡到牙槽骨轮廓，基础疾病、用药史和过敏史用无文字的档案动作表现",
+      focus: "术前检查与信息确认",
+      subtitle: "医生会检查口腔和牙槽骨情况，结合影像资料判断适合哪种修复方式；患者如实告知基础疾病、用药史和过敏史，并按要求完成检查。",
     },
     {
-      camera: "3D 牙颌模型旁依次展示活动全口义齿、种植覆盖义齿和固定修复三种模型，不出现拔牙或洗牙场景",
-      motion: "镜头用模型贴合度、摘戴动作和稳定支撑差异表现不同修复方案，不出现任何文字标签",
-      focus: "全口义齿方案选择",
-      subtitle: "根据骨量和修复目标，解释活动全口义齿、种植覆盖义齿和固定修复的差异。",
+      camera: "非血腥 3D 剖面动画展示种植体进入牙槽骨模型，避开真人口腔手术画面",
+      motion: "先展示种植体位置和数量规划，再让种植体沿预设点位缓慢就位，柔和光圈表示人工牙根支撑",
+      focus: "种植体位置规划与植入",
+      subtitle: "手术和修复通常分阶段进行，医生先确定种植体的位置和数量；如果需要种植，会在麻醉后把种植体放入牙槽骨中，让它像人工牙根一样提供支撑。",
     },
     {
-      camera: "非血腥 3D 剖面动画展示种植体进入牙槽骨模型，随后连接结构和义齿在模型上就位",
-      motion: "先展示种植体位置和数量规划，再让种植体沿预设点位就位，稳定后安装连接结构并戴入口内义齿",
-      focus: "种植体支持与义齿戴入",
-      subtitle: "确定种植体位置和数量，必要时麻醉后植入种植体，稳定后安装连接结构并戴入口内义齿。",
-    },
-    {
-      camera: "义齿咬合调整、软食、清洁工具和复诊动作连续呈现，保持口腔修复诊室和3D模型风格",
-      motion: "镜头表现咬合微调、前期软食、清洁维护和复查闭环，异常疼痛出血松动用无文字警示光点表示",
-      focus: "复查维护与异常处理",
-      subtitle: "调整咬合，按医嘱用药复查，前期软食并清洁维护，疼痛出血松动或咬合不适及时联系医生。",
+      camera: "连接结构、可摘义齿和固定修复模型在 3D 牙颌模型上依次就位，最后用软食、清洁和复诊动作表现维护",
+      motion: "种植体稳定后连接结构逐步装上，义齿戴入口内并微调咬合，再用摘戴动作、稳定支撑和清洁复查动作表现方案区别与术后维护",
+      focus: "义齿戴入、方案区别与术后维护",
+      subtitle: "等种植体逐渐稳定后，再安装连接结构，最后制作并戴入口内义齿；不同方案的区别主要在于能否摘戴、稳定性和接近天然牙的程度；术后按医嘱用药和复查，前期软食并注意清洁维护，异常及时联系医生。",
     },
   ],
 };
@@ -251,8 +244,8 @@ app.get("/api/health", (_request, response) => {
 });
 
 app.post("/api/generate", async (request, response) => {
-  const caseKey = String(request.body?.caseKey || "surgery");
-  const selectedCase = cases[caseKey] || cases.surgery;
+  const caseKey = String(request.body?.caseKey || "gastroscopy");
+  const selectedCase = cases[caseKey] || cases.gastroscopy;
   const doctorNotes = sanitizeText(request.body?.doctorNotes || "");
   const id = nanoid(12);
 
@@ -482,7 +475,7 @@ async function generateContent(selectedCase, doctorNotes) {
     "要求：只输出 JSON，不输出 Markdown；不要诊断、不要替代医生医嘱；避免技术实现、模型名称和内部术语；语气专业、清楚、安抚。",
     "同时生成患者查看素材，每一段都要像患者真正会看到的步骤说明，避免项目介绍、模型名称和技术实现描述。",
     "语音内容必须由你重新撰写，不要套用输入材料原句，不要像模板拼接；narration 要像真实护士/医生直接对患者说话，口语自然但医学谨慎，不要出现“宣教”等后台工作用词。",
-    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 五条；directorShots 五个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，260-380 字，面向患者。",
+    "JSON 字段：patientTitle 字符串；patientBrief 字符串，120 字以内；points 三条；storyboard 四条；directorShots 四个对象，每个对象包含 camera、motion、focus、subtitle、voiceover；warnings 三条；narration 字符串，260-380 字，面向患者。",
     `科室：${selectedCase.department}`,
     `项目：${selectedCase.project}`,
     `患者对象：${selectedCase.audience}`,
@@ -626,7 +619,7 @@ function normalizeContent(content, fallback) {
 function buildDirectorShots(selectedCase) {
   const key = Object.entries(cases).find(([, value]) => value === selectedCase)?.[0] || "surgery";
   const defaults = directorDefaults[key] || directorDefaults.surgery;
-  return selectedCase.storyboard.slice(0, 5).map((item, index) => {
+  return selectedCase.storyboard.slice(0, 4).map((item, index) => {
     const [title, body] = item.split("：");
     const preset = defaults[index] || defaults[0];
     return {
@@ -731,7 +724,7 @@ function buildVideoPrompt(content, selectedCase) {
     `Department: ${selectedCase.department}. Topic: ${selectedCase.project}. Patient audience: ${selectedCase.audience}.`,
     `Patient narration reference for visual pacing only: ${narration}`,
     `Visual storyboard: ${shotText}`,
-    "The video must explain the complete edentulous full denture restoration workflow, not wisdom tooth extraction, root canal treatment, tooth cleaning, or general dental hygiene. Keep pre-op and post-op brief; spend more visual time on treatment plan, full denture options, implant support, connection structure, and denture placement.",
+    "The video must explain edentulous jaw restoration, not general dental hygiene. Keep pre-op and post-op brief; spend more visual time on treatment plan, implant support, connection structure, and denture placement.",
     "Camera language: smooth macro movement, clear model-based medical explanation, clean composition, realistic but non-invasive.",
     "Absolutely no on-screen text: no Chinese characters, no English words, no subtitles, no labels, no UI text, no title cards, no captions, no floating text boxes, no medical UI words. Text and voiceover will be added later by the application.",
   ].join(" ");
@@ -749,8 +742,7 @@ function buildSeedanceSegmentPrompt(content, selectedCase, shot, index, total) {
     `本段对应旁白含义，仅用于理解画面，不要生成字幕、不要生成口播：${shotNarration}`,
     `画面安排：${shot.camera}；${shot.motion}。`,
     "本段只表现上面的旁白含义，不要提前表现后续段落，也不要重复前面段落。",
-    "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和全口义齿模型为主，可以少量出现牙椅或医生查看口腔影像，但不要变成泛医院宣传片。",
-    "当前 Demo 只做无牙颌全口义齿修复全流程；不要表现拔智齿、根管治疗、洗牙、补牙、美白、正畸等常规诊疗项目。",
+    "视觉必须以口腔医学 3D 动画、牙槽骨模型、种植体模型、连接结构和义齿模型为主，可以少量出现牙椅或医生查看口腔影像，但不要变成泛医院宣传片。",
     "禁止出现胸片、肺部 X 光、全身扫描、病房、走廊、营销海报、医疗仪表盘和无关 UI 界面。",
     "术前和术后画面简短，手术与修复过程画面更具体：种植点位、种植体就位、稳定结合、连接结构、义齿戴入要表达清楚。",
     `全片 16:9 横屏，${seedanceVideoResolution} 测试清晰度即可，段落之间必须风格一致，医学术语要准确。`,
@@ -1845,8 +1837,8 @@ function renderDentalScene(index, progress, accent) {
   const implantY = 408 + Math.sin(progress * Math.PI * 4) * 5;
   const scanX = 184 + progress * 94;
   const pathProgress = Math.min(1, progress * 1.2);
-  const phoneLift = index >= 3 ? 16 + progress * 32 : 0;
-  const cycleLabels = ["修复目标", "术前评估", "方案选择", "治疗流程", "复查维护"];
+  const phoneLift = index === 3 ? 16 + progress * 32 : 0;
+  const cycleLabels = ["检查评估", "方案确认", "手术配合", "复诊护理"];
 
   return `
     <g transform="rotate(${-chairTilt.toFixed(2)} 394 390)">
@@ -1856,8 +1848,8 @@ function renderDentalScene(index, progress, accent) {
     </g>
     ${person(608, 338, "#efc09e", "#ffffff", 1.06, accent)}
     <rect x="138" y="220" width="210" height="142" rx="24" fill="#ffffff" stroke="#dceae5" stroke-width="2"/>
-    ${check(162, 260, index === 0 ? "全口缺牙" : "影像评估", accent)}
-    ${check(162, 302, index === 2 ? "方案比较" : "慢病用药", accent)}
+    ${check(162, 260, index === 0 ? "CBCT影像" : "影像评估", accent)}
+    ${check(162, 302, index === 1 ? "周期确认" : "慢病用药", accent)}
     <rect x="370" y="216" width="170" height="120" rx="28" fill="#ffffff" stroke="#dceae5" stroke-width="2" opacity="${index <= 1 ? 1 : 0.7}"/>
     <path d="M404 286 Q440 248 478 286 T530 286" fill="none" stroke="${accent}" stroke-width="7" stroke-linecap="round"/>
     <circle cx="${scanX.toFixed(1)}" cy="260" r="${index === 0 ? 15 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
@@ -1867,7 +1859,7 @@ function renderDentalScene(index, progress, accent) {
     <circle cx="446" cy="${implantY.toFixed(1)}" r="${index === 2 ? 13 : 0}" fill="#eaf8a7" stroke="${accent}" stroke-width="4"/>
     <rect x="650" y="${(222 - phoneLift).toFixed(1)}" width="86" height="142" rx="20" fill="#142328"/>
     <path d="M670 286 Q694 258 716 286 T758 286" fill="none" stroke="#eaf8a7" stroke-width="5"/>
-    <rect x="674" y="${(322 - phoneLift).toFixed(1)}" width="38" height="8" rx="4" fill="${index >= 3 ? "#eaf8a7" : accent}" opacity="${index >= 3 ? 1 : 0.55}"/>
+    <rect x="674" y="${(322 - phoneLift).toFixed(1)}" width="38" height="8" rx="4" fill="${index === 3 ? "#eaf8a7" : accent}" opacity="${index === 3 ? 1 : 0.55}"/>
     <rect x="188" y="494" width="468" height="18" rx="9" fill="#dceae5"/>
     <rect x="188" y="494" width="${(118 + index * 116 + progress * 78).toFixed(1)}" height="18" rx="9" fill="${accent}" opacity="0.7"/>
     ${text(cycleLabels[index] || "术前宣教", 676, 506, 20, 900, "#2f454d")}
@@ -1875,18 +1867,18 @@ function renderDentalScene(index, progress, accent) {
 }
 
 function renderStepCards(activeIndex, progress, accent) {
-  return Array.from({ length: 5 })
+  return Array.from({ length: 4 })
     .map((_, index) => {
-      const y = 144 + index * 62;
+      const y = 168 + index * 70;
       const active = index === activeIndex;
       const fill = active ? accent : "#ffffff";
       const opacity = active ? 0.16 + progress * 0.2 : 0.7;
-      const label = ["修复目标", "术前评估", "方案选择", "治疗流程", "复查维护"][index];
+      const label = ["资料确认", "风险提示", "过程演示", "复诊护理"][index];
       return `
-        <rect x="886" y="${y}" width="238" height="44" rx="18" fill="${fill}" opacity="${opacity.toFixed(2)}"/>
-        <circle cx="914" cy="${y + 22}" r="11" fill="${active ? accent : "#d5e5df"}"/>
-        ${active ? `<circle cx="914" cy="${y + 22}" r="${(17 + progress * 14).toFixed(1)}" fill="${accent}" opacity="0.10"/>` : ""}
-        ${text(label, 940, y + 29, 19, active ? 900 : 700, active ? "#173137" : "#586b72")}
+        <rect x="886" y="${y}" width="238" height="48" rx="18" fill="${fill}" opacity="${opacity.toFixed(2)}"/>
+        <circle cx="914" cy="${y + 24}" r="12" fill="${active ? accent : "#d5e5df"}"/>
+        ${active ? `<circle cx="914" cy="${y + 24}" r="${(18 + progress * 16).toFixed(1)}" fill="${accent}" opacity="0.10"/>` : ""}
+        ${text(label, 940, y + 32, 20, active ? 900 : 700, active ? "#173137" : "#586b72")}
       `;
     })
     .join("");
